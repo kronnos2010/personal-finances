@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Personal Finances</title>
+<script src="https://accounts.google.com/gsi/client" onload="initGIS()" async></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#273449;--border:#334155;
+  --text:#f1f5f9;--muted:#94a3b8;--income:#22c55e;--expense:#ef4444;
+  --accent:#3b82f6;--warn:#f59e0b;--radius:12px;--nav:60px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%;max-width:480px;margin:0 auto;position:relative}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 8px;background:var(--bg);position:sticky;top:0;z-index:10}
+.header h1{font-size:18px;font-weight:700;letter-spacing:-0.3px}
+.header .subtitle{font-size:12px;color:var(--muted)}
+.header-right{display:flex;gap:4px;align-items:center}
+.icon-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;width:36px;height:36px}
+.icon-btn:hover{background:var(--surface2)}
+.page{flex:1;overflow-y:auto;padding-bottom:calc(var(--nav) + 16px);display:none}
+.page.active{display:block}
+.bottom-nav{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);display:flex;height:var(--nav);z-index:20}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;font-weight:500;padding:8px;transition:color .15s}
+.nav-btn .icon{font-size:20px;line-height:1}
+.nav-btn.active{color:var(--accent)}
+.nav-btn.add-btn{color:var(--income)}
+.card{background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--border)}
+.section-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:16px 20px 8px}
+.accounts-scroll{display:flex;gap:12px;padding:8px 20px 4px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.accounts-scroll::-webkit-scrollbar{display:none}
+.account-card{min-width:150px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;scroll-snap-align:start;cursor:pointer;transition:border-color .15s}
+.account-card:hover{border-color:var(--accent)}
+.account-card .acc-name{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account-card .acc-balance{font-size:22px;font-weight:700;letter-spacing:-0.5px}
+.account-card .acc-projected{font-size:11px;color:var(--muted);margin-top:2px}
+.timeline{padding:0 20px}
+.tl-group{margin-bottom:4px}
+.tl-date-header{font-size:12px;font-weight:600;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.tl-date-header .days-away{font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:20px}
+.tl-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.tl-item:last-child{border-bottom:none}
+.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.tl-dot.income{background:var(--income)}
+.tl-dot.expense{background:var(--expense)}
+.tl-info{flex:1;min-width:0}
+.tl-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-acct{font-size:11px;color:var(--muted)}
+.tl-amount{font-weight:600;font-size:14px;white-space:nowrap}
+.tl-amount.income{color:var(--income)}
+.tl-amount.expense{color:var(--expense)}
+.tl-balance{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+.month-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 20px}
+.month-nav h2{font-size:17px;font-weight:700}
+.month-nav button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+.summary-row{display:flex;gap:10px;padding:8px 20px}
+.summary-card{flex:1;background:var(--surface);border-radius:var(--radius);padding:12px;border:1px solid var(--border);text-align:center}
+.summary-card .s-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.summary-card .s-amount{font-size:18px;font-weight:700}
+.s-amount.income{color:var(--income)}
+.s-amount.expense{color:var(--expense)}
+.s-amount.net.pos{color:var(--income)}
+.s-amount.net.neg{color:var(--expense)}
+.tab-bar{display:flex;padding:8px 20px 0;gap:0;border-bottom:1px solid var(--border)}
+.tab{padding:8px 16px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.budget-list{padding:0 20px}
+.budget-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.budget-item:last-child{border-bottom:none}
+.budget-item .bi-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.budget-item .bi-info{flex:1;min-width:0}
+.budget-item .bi-name{font-size:14px;font-weight:500}
+.budget-item .bi-sub{font-size:12px;color:var(--muted)}
+.budget-item .bi-amt{font-size:15px;font-weight:600;white-space:nowrap}
+.settings-section{margin:0 20px 20px}
+.settings-section h3{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-bottom:1px solid var(--border);padding:14px 16px;cursor:pointer}
+.settings-row:first-of-type{border-radius:var(--radius) var(--radius) 0 0}
+.settings-row:last-of-type{border-radius:0 0 var(--radius) var(--radius);border-bottom:none}
+.settings-row:only-of-type{border-radius:var(--radius);border-bottom:none}
+.settings-row .sr-left{flex:1}
+.settings-row .sr-title{font-size:14px;font-weight:500}
+.settings-row .sr-sub{font-size:12px;color:var(--muted)}
+.settings-row .sr-right{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:flex-end;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px 20px 40px}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px}
+.modal h2{font-size:20px;font-weight:700;margin-bottom:20px}
+.steps{display:flex;gap:6px;margin-bottom:24px}
+.step{flex:1;height:3px;background:var(--border);border-radius:2px;transition:background .3s}
+.step.done{background:var(--accent)}
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.form-group input,.form-group select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:15px;outline:none;-webkit-appearance:none}
+.form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+.form-group select option{background:var(--surface);color:var(--text)}
+.type-picker{display:flex;gap:10px}
+.type-btn{flex:1;padding:16px;border-radius:var(--radius);border:2px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;text-align:center;font-size:14px;font-weight:600;transition:all .15s}
+.type-btn .tb-icon{font-size:28px;display:block;margin-bottom:8px}
+.type-btn.selected.income{border-color:var(--income);color:var(--income);background:rgba(34,197,94,.1)}
+.type-btn.selected.expense{border-color:var(--expense);color:var(--expense);background:rgba(239,68,68,.1)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
+.pill.selected{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.1)}
+.btn{display:block;width:100%;padding:14px;border-radius:12px;border:none;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-danger{background:var(--expense);color:#fff}
+.btn:active{opacity:.8}
+.btn-row{display:flex;gap:10px;margin-top:20px}
+.btn-row .btn{flex:1}
+.edit-fields{display:flex;flex-direction:column;gap:14px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
+.toggle{position:relative;width:46px;height:26px}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;inset:0;background:var(--border);border-radius:13px;transition:.3s;cursor:pointer}
+.slider::before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.3s}
+.toggle input:checked+.slider{background:var(--accent)}
+.toggle input:checked+.slider::before{transform:translateX(20px)}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty .em-icon{font-size:48px;margin-bottom:12px}
+.empty p{font-size:14px}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface2);color:var(--text);padding:10px 20px;border-radius:20px;font-size:14px;font-weight:500;z-index:200;opacity:0;transition:opacity .3s;border:1px solid var(--border);white-space:nowrap}
+.toast.show{opacity:1}
+.cat-housing{background:rgba(59,130,246,.2);color:#60a5fa}
+.cat-utilities{background:rgba(234,179,8,.2);color:#facc15}
+.cat-insurance{background:rgba(168,85,247,.2);color:#c084fc}
+.cat-debt{background:rgba(239,68,68,.2);color:#f87171}
+.cat-credit{background:rgba(249,115,22,.2);color:#fb923c}
+.cat-income{background:rgba(34,197,94,.2);color:#4ade80}
+.cat-other{background:rgba(148,163,184,.2);color:#94a3b8}
+/* Sync styles */
+.sync-icon-btn{position:relative}
+@keyframes spin{to{transform:rotate(360deg)}}
+.syncing-spin{display:inline-block;animation:spin 1s linear infinite}
+.sync-banner{margin:8px 20px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;gap:12px}
+.sync-banner.hidden{display:none}
+.sync-banner-icon{font-size:24px;flex-shrink:0}
+.sync-banner-body{flex:1}
+.sync-banner-title{font-size:14px;font-weight:600;margin-bottom:2px}
+.sync-banner-sub{font-size:12px;color:var(--muted)}
+.sync-banner-btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div>
+      <h1>Personal Finances</h1>
+      <div class="subtitle" id="today-date"></div>
+    </div>
+    <div class="header-right">
+      <button class="icon-btn sync-icon-btn" id="sync-btn" onclick="openSyncModal()" title="Sync">
+        <span id="sync-icon">☁️</span>
+      </button>
+      <button class="icon-btn" onclick="openPage('settings')" title="Settings">⚙️</button>
+    </div>
+  </div>
+
+  <!-- HOME PAGE -->
+  <div id="page-home" class="page active">
+    <div id="sync-banner" class="sync-banner hidden">
+      <div class="sync-banner-icon" id="sync-banner-icon">🔗</div>
+      <div class="sync-banner-body">
+        <div class="sync-banner-title" id="sync-banner-title">Set up sync</div>
+        <div class="sync-banner-sub" id="sync-banner-sub">Connect Google Drive to sync across devices</div>
+      </div>
+      <button class="sync-banner-btn" id="sync-banner-btn" onclick="openSyncModal()">Connect</button>
+    </div>
+    <div class="section-title">Accounts</div>
+    <div class="accounts-scroll" id="accounts-list"></div>
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Upcoming</span>
+      <span style="font-size:12px;color:var(--muted);padding-right:20px" id="combined-balance"></span>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+  <!-- BUDGET PAGE -->
+  <div id="page-budget" class="page">
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">&#8249;</button>
+      <h2 id="budget-month-label"></h2>
+      <button onclick="changeMonth(1)">&#8250;</button>
+    </div>
+    <div class="summary-row" id="budget-summary"></div>
+    <div class="tab-bar">
+      <div class="tab active" data-tab="all" onclick="selectBudgetTab(this,'all')">All</div>
+      <div class="tab" data-tab="income" onclick="selectBudgetTab(this,'income')">Income</div>
+      <div class="tab" data-tab="expenses" onclick="selectBudgetTab(this,'expenses')">Expenses</div>
+    </div>
+    <div class="budget-list" id="budget-list"></div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div id="page-settings" class="page">
+    <div class="section-title">Accounts</div>
+    <div class="settings-section" id="settings-accounts"></div>
+    <div class="section-title">Income Sources</div>
+    <div class="settings-section" id="settings-income"></div>
+    <div class="section-title">Bills &amp; Payments</div>
+    <div class="settings-section" id="settings-bills"></div>
+    <div class="section-title">Sync</div>
+    <div class="settings-section" id="settings-sync"></div>
+    <div class="section-title">Data</div>
+    <div class="settings-section">
+      <div class="settings-row" onclick="exportData()">
+        <div class="sr-left"><div class="sr-title">Export to JSON</div><div class="sr-sub">Save a local backup</div></div>
+        <div class="sr-right">💾</div>
+      </div>
+      <div class="settings-row" onclick="document.getElementById('import-file').click()">
+        <div class="sr-left"><div class="sr-title">Import from JSON</div><div class="sr-sub">Restore from a backup file</div></div>
+        <div class="sr-right">📂</div>
+      </div>
+      <div class="settings-row" onclick="resetConfirm()">
+        <div class="sr-left"><div class="sr-title" style="color:var(--expense)">Reset All Data</div><div class="sr-sub">Clears everything and restores defaults</div></div>
+        <div class="sr-right">🗑️</div>
+      </div>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" id="nav-home" onclick="openPage('home')">
+      <span class="icon">🏠</span><span>Home</span>
+    </button>
+    <button class="nav-btn" id="nav-budget" onclick="openPage('budget')">
+      <span class="icon">📊</span><span>Budget</span>
+    </button>
+    <button class="nav-btn add-btn" onclick="openWizard()">
+      <span class="icon" style="font-size:26px;background:var(--income);color:#000;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:-4px auto 0">+</span>
+      <span>Add</span>
+    </button>
+    <button class="nav-btn" id="nav-settings" onclick="openPage('settings')">
+      <span class="icon">⚙️</span><span>Settings</span>
+    </button>
+  </div>
+</div>
+
+<!-- SYNC MODAL -->
+<div class="modal-overlay" id="sync-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Sync Setup</h2>
+    <div id="sync-modal-body"></div>
+  </div>
+</div>
+
+<!-- WIZARD MODAL -->
+<div class="modal-overlay" id="wizard-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="wizard-title">Add Payment</h2>
+    <div class="steps" id="wizard-steps"></div>
+    <div id="wizard-body"></div>
+  </div>
+</div>
+
+<!-- EDIT ACCOUNT MODAL -->
+<div class="modal-overlay" id="edit-account-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Edit Account</h2>
+    <div class="edit-fields">
+      <div class="form-group"><label>Account Name</label><input id="ea-name" type="text"></div>
+      <div class="form-group"><label>Current Balance (CAD)</label><input id="ea-balance" type="number" step="0.01"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('edit-account-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAccount()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ITEM MODAL -->
+<div class="modal-overlay" id="edit-item-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="edit-item-title">Edit</h2>
+    <div id="edit-item-body"></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" onclick="deleteItem()">Delete</button>
+      <button class="btn btn-secondary" onclick="closeModal('edit-item-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== CONFIG =====
+// Replace YOUR_CLIENT_ID with your Google OAuth 2.0 Client ID
+// from https://console.cloud.google.com/
+const CONFIG = {
+  GOOGLE_CLIENT_ID: 'YOUR_CLIENT_ID.apps.googleusercontent.com',
+};
+
+// ===== DATA MODEL =====
+const DEFAULT_DATA = {
+  version: 2,
+  lastModified: 0,
+  accounts: [
+    { id: 'td', name: 'TD Bank', balance: 0 },
+    { id: 'jo-tan', name: 'Johanna Tangerine', balance: 363.99 },
+    { id: 'dav-tan', name: 'David Tangerine', balance: 1535.88 }
+  ],
+  income: [
+    { id: 'dav-pay', name: "David's Pay", amount: 1573.10, account: 'dav-tan',
+      recurrence: 'weekly', startDate: '2026-01-02', active: true }
+  ],
+  bills: [
+    { id: 'mortgage', name: 'Mortgage', amount: 366.09, account: 'td',
+      category: 'housing', recurrence: 'weekly', startDate: '2026-01-06', active: true },
+    { id: 'bell', name: 'Bell Mobility/Internet', amount: 108.48, account: 'dav-tan',
+      category: 'utilities', recurrence: 'monthly', dayOfMonth: 6, active: true },
+    { id: 'car-ins', name: 'Car & Home Insurance', amount: 425.06, account: 'dav-tan',
+      category: 'insurance', recurrence: 'monthly', dayOfMonth: 12, active: true },
+    { id: 'life-ins', name: 'Life Insurance', amount: 55.20, account: 'dav-tan',
+      category: 'insurance', recurrence: 'monthly', dayOfMonth: 9, active: true },
+    { id: 'paybright', name: 'Paybright', amount: 46.61, account: 'dav-tan',
+      category: 'debt', recurrence: 'monthly', dayOfMonth: 7, active: true },
+    { id: 'acc-ins', name: 'Accident Insurance', amount: 8.59, account: 'dav-tan',
+      category: 'insurance', recurrence: 'monthly', dayOfMonth: 8, active: true },
+    { id: 'osap-d', name: 'OSAP David', amount: 304.72, account: 'dav-tan',
+      category: 'debt', recurrence: 'monthly', dayOfMonth: 31, active: true },
+    { id: 'osap-j', name: 'OSAP Johanna', amount: 67.44, account: 'jo-tan',
+      category: 'debt', recurrence: 'monthly', dayOfMonth: 31, active: true },
+    { id: 'hydro', name: 'Alectra Hydro', amount: 95.00, account: 'dav-tan',
+      category: 'utilities', recurrence: 'monthly', dayOfMonth: 16, active: true },
+    { id: 'gas', name: 'Gas', amount: 96.00, account: 'dav-tan',
+      category: 'utilities', recurrence: 'monthly', dayOfMonth: 12, active: true },
+    { id: 'jo-cc', name: 'Johanna CC', amount: 200.00, account: 'jo-tan',
+      category: 'credit', recurrence: 'monthly', dayOfMonth: 20, active: true },
+    { id: 'dav-cc', name: 'David CC', amount: 2500.00, account: 'dav-tan',
+      category: 'credit', recurrence: 'monthly', dayOfMonth: 16, active: true }
+  ]
+};
+
+let data = null;
+let budgetMonth = new Date();
+budgetMonth.setDate(1);
+let editAccountId = null;
+let editItemType = null;
+let editItemId = null;
+let wizardState = {};
+let currentBudgetTab = 'all';
+
+// ===== SYNC STATE =====
+const sync = {
+  method: localStorage.getItem('sync_method') || null, // 'drive' | 'filesystem' | null
+  status: 'unconnected', // 'idle' | 'syncing' | 'error' | 'unconnected'
+  accessToken: localStorage.getItem('drive_access_token') || null,
+  tokenExpiry: parseInt(localStorage.getItem('drive_token_expiry') || '0'),
+  driveFileId: localStorage.getItem('drive_file_id') || null,
+  fileHandle: null,
+  lastSynced: parseInt(localStorage.getItem('last_synced') || '0'),
+  tokenClient: null,
+  pendingResolve: null,
+};
+
+// ===== SYNC — GOOGLE IDENTITY SERVICES =====
+function initGIS() {
+  if (!CONFIG.GOOGLE_CLIENT_ID || CONFIG.GOOGLE_CLIENT_ID.includes('YOUR_CLIENT_ID')) return;
+  if (typeof google === 'undefined' || !google.accounts) return;
+  sync.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.appdata',
+    callback: (resp) => {
+      if (resp.error) {
+        setSyncStatus('error');
+        showToast('Drive auth failed');
+        if (sync.pendingResolve) { sync.pendingResolve(false); sync.pendingResolve = null; }
+        return;
+      }
+      sync.accessToken = resp.access_token;
+      sync.tokenExpiry = Date.now() + (resp.expires_in * 1000);
+      localStorage.setItem('drive_access_token', resp.access_token);
+      localStorage.setItem('drive_token_expiry', sync.tokenExpiry);
+      localStorage.setItem('sync_method', 'drive');
+      sync.method = 'drive';
+      if (sync.pendingResolve) { sync.pendingResolve(true); sync.pendingResolve = null; }
+    },
+  });
+}
+
+function requestDriveToken(silent) {
+  return new Promise((resolve) => {
+    if (!sync.tokenClient) { resolve(false); return; }
+    // Token still valid
+    if (sync.accessToken && Date.now() < sync.tokenExpiry - 60000) {
+      resolve(true); return;
+    }
+    sync.pendingResolve = resolve;
+    sync.tokenClient.requestAccessToken({ prompt: silent ? '' : 'consent' });
+  });
+}
+
+// ===== SYNC — DRIVE FILE OPS =====
+async function driveGetFileId() {
+  if (sync.driveFileId) return sync.driveFileId;
+  const token = sync.accessToken;
+  // Search appDataFolder for existing file
+  const res = await fetch(
+    "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'finances-data.json'&fields=files(id)",
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const json = await res.json();
+  if (json.files && json.files.length > 0) {
+    sync.driveFileId = json.files[0].id;
+    localStorage.setItem('drive_file_id', sync.driveFileId);
+    return sync.driveFileId;
+  }
+  // Create new file
+  const create = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'finances-data.json', parents: ['appDataFolder'] }),
+  });
+  const file = await create.json();
+  sync.driveFileId = file.id;
+  localStorage.setItem('drive_file_id', sync.driveFileId);
+  return sync.driveFileId;
+}
+
+async function driveLoad() {
+  try {
+    const ok = await requestDriveToken(true);
+    if (!ok) return null;
+    const fileId = await driveGetFileId();
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: `Bearer ${sync.accessToken}` } }
+    );
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text.trim()) return null;
+    return JSON.parse(text);
+  } catch (e) { return null; }
+}
+
+async function driveSave(dataObj) {
+  try {
+    const ok = await requestDriveToken(true);
+    if (!ok) return false;
+    const fileId = await driveGetFileId();
+    const res = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${sync.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataObj),
+      }
+    );
+    return res.ok;
+  } catch (e) { return false; }
+}
+
+// ===== SYNC — FILE SYSTEM ACCESS API =====
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('pf_handles', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('h');
+    req.onsuccess = e => res(e.target.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+async function idbSaveHandle(handle) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('h', 'readwrite');
+    tx.objectStore('h').put(handle, 'main');
+    tx.oncomplete = res; tx.onerror = rej;
+  });
+}
+
+async function idbLoadHandle() {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('h', 'readonly');
+    const req = tx.objectStore('h').get('main');
+    req.onsuccess = () => res(req.result || null);
+    req.onerror = rej;
+  });
+}
+
+async function fileLoad() {
+  if (!sync.fileHandle) return null;
+  try {
+    const perm = await sync.fileHandle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      const req = await sync.fileHandle.requestPermission({ mode: 'readwrite' });
+      if (req !== 'granted') return null;
+    }
+    const file = await sync.fileHandle.getFile();
+    const text = await file.text();
+    if (!text.trim()) return null;
+    return JSON.parse(text);
+  } catch (e) { return null; }
+}
+
+async function fileSave(dataObj) {
+  if (!sync.fileHandle) return false;
+  try {
+    const writable = await sync.fileHandle.createWritable();
+    await writable.write(JSON.stringify(dataObj, null, 2));
+    await writable.close();
+    return true;
+  } catch (e) { return false; }
+}
+
+async function pickFile() {
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'JSON Data File', accept: { 'application/json': ['.json'] } }],
+      multiple: false,
+    });
+    sync.fileHandle = handle;
+    await idbSaveHandle(handle);
+    localStorage.setItem('sync_method', 'filesystem');
+    sync.method = 'filesystem';
+    return true;
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast('Could not open file');
+    return false;
+  }
+}
+
+async function createFile() {
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: 'finances-data.json',
+      types: [{ description: 'JSON Data File', accept: { 'application/json': ['.json'] } }],
+    });
+    sync.fileHandle = handle;
+    await idbSaveHandle(handle);
+    localStorage.setItem('sync_method', 'filesystem');
+    sync.method = 'filesystem';
+    return true;
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast('Could not create file');
+    return false;
+  }
+}
+
+// ===== SYNC — CORE =====
+function setSyncStatus(status) {
+  sync.status = status;
+  const icon = document.getElementById('sync-icon');
+  if (!icon) return;
+  const map = { idle: '☁️', syncing: '<span class="syncing-spin">🔄</span>', error: '⚠️', unconnected: '🔗' };
+  icon.innerHTML = map[status] || '☁️';
+  updateSyncBanner();
+}
+
+function updateSyncBanner() {
+  const banner = document.getElementById('sync-banner');
+  if (!banner) return;
+  if (sync.status === 'unconnected') {
+    banner.classList.remove('hidden');
+    document.getElementById('sync-banner-icon').textContent = '🔗';
+    document.getElementById('sync-banner-title').textContent = 'Sync not set up';
+    document.getElementById('sync-banner-sub').textContent = 'Connect Google Drive to sync across all devices';
+    document.getElementById('sync-banner-btn').textContent = 'Set up';
+  } else if (sync.status === 'error') {
+    banner.classList.remove('hidden');
+    document.getElementById('sync-banner-icon').textContent = '⚠️';
+    document.getElementById('sync-banner-title').textContent = 'Sync error';
+    document.getElementById('sync-banner-sub').textContent = 'Could not reach sync source. Tap to reconnect.';
+    document.getElementById('sync-banner-btn').textContent = 'Reconnect';
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+async function syncLoad() {
+  if (sync.method === 'drive') {
+    setSyncStatus('syncing');
+    const remote = await driveLoad();
+    if (remote) {
+      if ((remote.lastModified || 0) > (data ? data.lastModified || 0 : 0)) {
+        data = remote;
+        localStorage.setItem('pf_data_v2', JSON.stringify(data));
+        renderCurrentPage();
+        showToast('Synced from Drive');
+      }
+      setSyncStatus('idle');
+      sync.lastSynced = Date.now();
+      localStorage.setItem('last_synced', sync.lastSynced);
+    } else {
+      setSyncStatus('error');
+    }
+  } else if (sync.method === 'filesystem' && sync.fileHandle) {
+    const remote = await fileLoad();
+    if (remote && (remote.lastModified || 0) > (data ? data.lastModified || 0 : 0)) {
+      data = remote;
+      localStorage.setItem('pf_data_v2', JSON.stringify(data));
+      renderCurrentPage();
+      showToast('Synced from file');
+    }
+    setSyncStatus('idle');
+  }
+}
+
+async function initSync() {
+  // Restore file handle from IDB
+  if (!sync.method || sync.method === 'filesystem') {
+    try {
+      const handle = await idbLoadHandle();
+      if (handle) {
+        sync.fileHandle = handle;
+        if (!sync.method) { sync.method = 'filesystem'; localStorage.setItem('sync_method', 'filesystem'); }
+      }
+    } catch (e) {}
+  }
+
+  // Try to load remote data
+  if (sync.method === 'drive') {
+    setSyncStatus('syncing');
+    const remote = await driveLoad();
+    if (remote) {
+      data = remote;
+      localStorage.setItem('pf_data_v2', JSON.stringify(data));
+      setSyncStatus('idle');
+      sync.lastSynced = Date.now();
+      localStorage.setItem('last_synced', sync.lastSynced);
+    } else {
+      // Token expired — fall back to localStorage, show error
+      data = data || JSON.parse(JSON.stringify(DEFAULT_DATA));
+      setSyncStatus('error');
+    }
+  } else if (sync.method === 'filesystem' && sync.fileHandle) {
+    const remote = await fileLoad();
+    if (remote) {
+      data = remote;
+      localStorage.setItem('pf_data_v2', JSON.stringify(data));
+    }
+    setSyncStatus(sync.fileHandle ? 'idle' : 'unconnected');
+  } else {
+    setSyncStatus('unconnected');
+  }
+}
+
+// Re-sync when user returns to the tab
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sync.method && sync.status !== 'syncing') {
+    syncLoad();
+  }
+});
+
+// ===== SYNC MODAL =====
+function openSyncModal() {
+  renderSyncModal();
+  document.getElementById('sync-overlay').classList.add('open');
+}
+
+function renderSyncModal() {
+  const hasFilePicker = 'showOpenFilePicker' in window;
+  const method = sync.method;
+  const lastSyncedStr = sync.lastSynced
+    ? new Date(sync.lastSynced).toLocaleString('en-CA')
+    : 'Never';
+
+  let html = '';
+
+  if (method === 'drive') {
+    html = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:24px">☁️</span>
+          <div><div style="font-weight:600">Google Drive</div><div style="font-size:12px;color:var(--muted)">Last synced: ${lastSyncedStr}</div></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">Data is stored privately in your Google Drive app data folder — not visible in your Drive file browser.</div>
+      </div>
+      <button class="btn btn-primary" style="margin-bottom:10px" onclick="syncNow()">Sync Now</button>
+      <button class="btn btn-secondary" onclick="disconnectSync()">Disconnect Drive</button>
+    `;
+  } else if (method === 'filesystem') {
+    const fname = sync.fileHandle ? sync.fileHandle.name : 'unknown';
+    html = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:24px">📁</span>
+          <div><div style="font-weight:600">Local File</div><div style="font-size:12px;color:var(--muted)">${fname}</div></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">Place this file in your Google Drive folder so it syncs automatically to all devices.</div>
+      </div>
+      <button class="btn btn-primary" style="margin-bottom:10px" onclick="syncNow()">Read File Now</button>
+      <button class="btn btn-secondary" onclick="disconnectSync()">Disconnect File</button>
+    `;
+  } else {
+    // Not connected — show options
+    const clientConfigured = CONFIG.GOOGLE_CLIENT_ID && !CONFIG.GOOGLE_CLIENT_ID.includes('YOUR_CLIENT_ID');
+    html = `
+      <p style="color:var(--muted);font-size:13px;margin-bottom:20px">Choose how to sync your data across devices. Your financial data never leaves your own accounts.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-primary" onclick="connectDrive()" ${clientConfigured ? '' : 'disabled'} style="${clientConfigured ? '' : 'opacity:.4'}">
+          ☁️ &nbsp;Connect Google Drive
+        </button>
+        ${!clientConfigured ? '<p style="font-size:11px;color:var(--warn);margin-top:-6px;text-align:center">Google Client ID not configured — see setup guide</p>' : ''}
+        ${hasFilePicker ? `
+        <button class="btn btn-secondary" onclick="connectFileExisting()">📂 &nbsp;Open Existing Data File</button>
+        <button class="btn btn-secondary" onclick="connectFileNew()">📄 &nbsp;Create New Data File</button>
+        <p style="font-size:11px;color:var(--muted);text-align:center">Pick a file inside your Google Drive folder for automatic sync</p>
+        ` : `<p style="font-size:12px;color:var(--muted);text-align:center;padding:8px 0">File sync not supported in this browser.<br>Use Google Drive option on mobile.</p>`}
+      </div>
+    `;
+  }
+
+  document.getElementById('sync-modal-body').innerHTML = html;
+}
+
+async function connectDrive() {
+  if (!sync.tokenClient) {
+    showToast('Google auth not available — check Client ID in CONFIG');
+    return;
+  }
+  closeModal('sync-overlay');
+  setSyncStatus('syncing');
+  const ok = await requestDriveToken(false);
+  if (!ok) { setSyncStatus('error'); return; }
+
+  // Try to load existing data from Drive
+  const remote = await driveLoad();
+  if (remote) {
+    if (remote.lastModified > (data ? data.lastModified || 0 : 0)) {
+      data = remote;
+      localStorage.setItem('pf_data_v2', JSON.stringify(data));
+      renderCurrentPage();
+      showToast('Loaded data from Drive ✓');
+    } else {
+      // Push local data to Drive
+      await driveSave(data);
+      showToast('Google Drive connected ✓');
+    }
+  } else {
+    // First time: push current data to Drive
+    data.lastModified = Date.now();
+    await driveSave(data);
+    showToast('Google Drive connected ✓');
+  }
+  setSyncStatus('idle');
+  sync.lastSynced = Date.now();
+  localStorage.setItem('last_synced', sync.lastSynced);
+  renderSettings();
+  updateSyncBanner();
+}
+
+async function connectFileExisting() {
+  const ok = await pickFile();
+  if (!ok) return;
+  const remote = await fileLoad();
+  if (remote) {
+    if ((remote.lastModified || 0) > (data ? data.lastModified || 0 : 0)) {
+      data = remote;
+      localStorage.setItem('pf_data_v2', JSON.stringify(data));
+      renderCurrentPage();
+    }
+  } else {
+    // Empty file — write current data
+    await fileSave(data);
+  }
+  setSyncStatus('idle');
+  closeModal('sync-overlay');
+  showToast('File connected ✓');
+  renderSettings();
+}
+
+async function connectFileNew() {
+  const ok = await createFile();
+  if (!ok) return;
+  data.lastModified = Date.now();
+  await fileSave(data);
+  setSyncStatus('idle');
+  closeModal('sync-overlay');
+  showToast('New data file created ✓');
+  renderSettings();
+}
+
+async function syncNow() {
+  closeModal('sync-overlay');
+  await syncLoad();
+  if (sync.status === 'idle') showToast('Up to date ✓');
+}
+
+function disconnectSync() {
+  if (!confirm('Disconnect sync? Your local data is kept.')) return;
+  sync.method = null;
+  sync.accessToken = null;
+  sync.driveFileId = null;
+  sync.fileHandle = null;
+  localStorage.removeItem('sync_method');
+  localStorage.removeItem('drive_access_token');
+  localStorage.removeItem('drive_token_expiry');
+  localStorage.removeItem('drive_file_id');
+  setSyncStatus('unconnected');
+  closeModal('sync-overlay');
+  showToast('Disconnected');
+  renderSettings();
+}
+
+function renderCurrentPage() {
+  const active = document.querySelector('.page.active');
+  if (!active) return;
+  const id = active.id.replace('page-', '');
+  if (id === 'home') renderHome();
+  else if (id === 'budget') renderBudget();
+  else if (id === 'settings') renderSettings();
+}
+
+// ===== STORAGE =====
+function loadData() {
+  try {
+    const raw = localStorage.getItem('pf_data_v2');
+    data = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_DATA));
+    if (!data.lastModified) data.lastModified = 0;
+  } catch(e) {
+    data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  }
+}
+
+async function saveData() {
+  data.lastModified = Date.now();
+  localStorage.setItem('pf_data_v2', JSON.stringify(data));
+  if (sync.method === 'drive') {
+    setSyncStatus('syncing');
+    const ok = await driveSave(data);
+    setSyncStatus(ok ? 'idle' : 'error');
+    if (ok) { sync.lastSynced = Date.now(); localStorage.setItem('last_synced', sync.lastSynced); }
+  } else if (sync.method === 'filesystem' && sync.fileHandle) {
+    await fileSave(data);
+    setSyncStatus('idle');
+  }
+}
+
+// ===== DATE UTILS =====
+function today() {
+  const d = new Date(); d.setHours(0,0,0,0); return d;
+}
+function parseDate(s) {
+  if (!s) return new Date();
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function fmtDate(d) {
+  return d.toLocaleDateString('en-CA', {month:'short',day:'numeric',weekday:'short'});
+}
+function fmtDateShort(d) {
+  return d.toLocaleDateString('en-CA', {month:'short',day:'numeric'});
+}
+function isoDate(d) {
+  return d.toISOString().split('T')[0];
+}
+function lastDayOfMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+// ===== RECURRENCE ENGINE =====
+function getOccurrences(item, fromDate, toDate) {
+  const from = new Date(fromDate); from.setHours(0,0,0,0);
+  const to = new Date(toDate); to.setHours(23,59,59,999);
+  const results = [];
+  if (!item.active) return results;
+  switch (item.recurrence) {
+    case 'weekly':
+    case 'biweekly': {
+      const interval = item.recurrence === 'weekly' ? 7 : 14;
+      let d = parseDate(item.startDate);
+      while (d < from) d.setDate(d.getDate() + interval);
+      while (d <= to) { results.push(new Date(d)); d.setDate(d.getDate() + interval); }
+      break;
+    }
+    case 'monthly': {
+      const dom = item.dayOfMonth || 1;
+      let y = from.getFullYear(), m = from.getMonth();
+      if (m === 0) { y--; m = 11; } else m--;
+      for (let i = 0; i < 24; i++) {
+        const actualDay = Math.min(dom, lastDayOfMonth(y, m));
+        const d = new Date(y, m, actualDay);
+        if (d > to) break;
+        if (d >= from) results.push(d);
+        m++; if (m > 11) { m = 0; y++; }
+      }
+      break;
+    }
+    case 'twicemonthly': {
+      const days = item.daysOfMonth || [1, 15];
+      let y = from.getFullYear(), m = from.getMonth();
+      if (m === 0) { y--; m = 11; } else m--;
+      for (let i = 0; i < 24; i++) {
+        for (const dom of days) {
+          const actualDay = Math.min(dom, lastDayOfMonth(y, m));
+          const d = new Date(y, m, actualDay);
+          if (d > to) break;
+          if (d >= from) results.push(d);
+        }
+        m++; if (m > 11) { m = 0; y++; }
+      }
+      results.sort((a, b) => a - b);
+      break;
+    }
+    case 'once': {
+      const d = parseDate(item.startDate);
+      if (d >= from && d <= to) results.push(d);
+      break;
+    }
+  }
+  return results;
+}
+
+function getEvents(from, to) {
+  const events = [];
+  for (const item of data.income)
+    for (const d of getOccurrences(item, from, to))
+      events.push({ date: d, type: 'income', item, amount: item.amount });
+  for (const item of data.bills)
+    for (const d of getOccurrences(item, from, to))
+      events.push({ date: d, type: 'expense', item, amount: item.amount });
+  events.sort((a, b) => a.date - b.date);
+  return events;
+}
+
+// ===== FORMATTING =====
+function fmt(n) {
+  return '$' + Math.abs(n).toLocaleString('en-CA', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function getAccount(id) {
+  return data.accounts.find(a => a.id === id) || { name: id };
+}
+const CAT_ICON = {
+  housing:'🏠', utilities:'💡', insurance:'🛡️', debt:'📋',
+  credit:'💳', income:'💰', other:'📦'
+};
+
+// ===== RENDER HOME =====
+function renderHome() {
+  const t = today();
+  document.getElementById('today-date').textContent =
+    t.toLocaleDateString('en-CA', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+  const to90 = new Date(t); to90.setDate(to90.getDate() + 90);
+  const events = getEvents(t, to90);
+  const to30 = new Date(t); to30.setDate(to30.getDate() + 30);
+  const projMap = {};
+  for (const a of data.accounts) projMap[a.id] = a.balance;
+  for (const ev of getEvents(t, to30)) {
+    const aid = ev.item.account;
+    if (projMap[aid] !== undefined)
+      projMap[aid] += ev.type === 'income' ? ev.amount : -ev.amount;
+  }
+
+  const totalBalance = data.accounts.reduce((s, a) => s + a.balance, 0);
+
+  document.getElementById('accounts-list').innerHTML = data.accounts.map(a => `
+    <div class="account-card" onclick="editAccount('${a.id}')">
+      <div class="acc-name">${a.name}</div>
+      <div class="acc-balance">${fmt(a.balance)}</div>
+      <div class="acc-projected" style="color:${projMap[a.id] >= a.balance ? 'var(--income)' : 'var(--expense)'}">
+        30d: ${fmt(projMap[a.id])}
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('combined-balance').textContent = `Total: ${fmt(totalBalance)}`;
+
+  const tl = document.getElementById('timeline');
+  if (events.length === 0) {
+    tl.innerHTML = '<div class="empty"><div class="em-icon">📅</div><p>No upcoming payments found</p></div>';
+    return;
+  }
+
+  const grouped = {};
+  for (const ev of events) {
+    const key = isoDate(ev.date);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(ev);
+  }
+
+  let running = totalBalance;
+  tl.innerHTML = Object.entries(grouped).map(([dateStr, evs]) => {
+    const d = parseDate(dateStr);
+    const netDay = evs.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
+    running += netDay;
+    const balColor = running < 0 ? 'var(--expense)' : running < 500 ? 'var(--warn)' : 'var(--income)';
+    const items = evs.map(ev => `
+      <div class="tl-item">
+        <div class="tl-dot ${ev.type}"></div>
+        <div class="tl-info">
+          <div class="tl-name">${ev.item.name}</div>
+          <div class="tl-acct">${getAccount(ev.item.account).name}</div>
+        </div>
+        <div>
+          <div class="tl-amount ${ev.type}">${ev.type === 'income' ? '+' : '-'}${fmt(ev.amount)}</div>
+        </div>
+      </div>
+    `).join('');
+    return `
+      <div class="tl-group">
+        <div class="tl-date-header">
+          <span>${fmtDate(d)}</span>
+          <span class="days-away" style="color:${balColor}">${fmt(running)}</span>
+        </div>
+        ${items}
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== RENDER BUDGET =====
+function renderBudget() {
+  const y = budgetMonth.getFullYear(), m = budgetMonth.getMonth();
+  document.getElementById('budget-month-label').textContent =
+    budgetMonth.toLocaleDateString('en-CA', {month:'long',year:'numeric'});
+
+  const from = new Date(y, m, 1), to = new Date(y, m + 1, 0);
+  const events = getEvents(from, to);
+
+  const totalIncome = events.filter(e => e.type === 'income').reduce((s,e) => s + e.amount, 0);
+  const totalExpense = events.filter(e => e.type === 'expense').reduce((s,e) => s + e.amount, 0);
+  const net = totalIncome - totalExpense;
+
+  document.getElementById('budget-summary').innerHTML = `
+    <div class="summary-card"><div class="s-label">Income</div><div class="s-amount income">${fmt(totalIncome)}</div></div>
+    <div class="summary-card"><div class="s-label">Expenses</div><div class="s-amount expense">${fmt(totalExpense)}</div></div>
+    <div class="summary-card"><div class="s-label">Net</div><div class="s-amount net ${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</div></div>
+  `;
+
+  const filtered = events.filter(e =>
+    currentBudgetTab === 'all' ? true :
+    currentBudgetTab === 'income' ? e.type === 'income' : e.type === 'expense'
+  );
+
+  document.getElementById('budget-list').innerHTML = filtered.length === 0
+    ? '<div class="empty"><div class="em-icon">📭</div><p>No entries this month</p></div>'
+    : filtered.map(ev => {
+        const cat = ev.item.category || (ev.type === 'income' ? 'income' : 'other');
+        return `
+          <div class="budget-item">
+            <div class="bi-icon cat-${cat}">${CAT_ICON[cat] || '📦'}</div>
+            <div class="bi-info">
+              <div class="bi-name">${ev.item.name}</div>
+              <div class="bi-sub">${fmtDateShort(ev.date)} · ${getAccount(ev.item.account).name}</div>
+            </div>
+            <div class="bi-amt" style="color:${ev.type === 'income' ? 'var(--income)' : 'var(--expense)'}">
+              ${ev.type === 'income' ? '+' : '-'}${fmt(ev.amount)}
+            </div>
+          </div>
+        `;
+      }).join('');
+}
+
+function changeMonth(dir) {
+  budgetMonth.setMonth(budgetMonth.getMonth() + dir);
+  renderBudget();
+}
+
+function selectBudgetTab(el, tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentBudgetTab = tab;
+  renderBudget();
+}
+
+// ===== RENDER SETTINGS =====
+function renderSettings() {
+  document.getElementById('settings-accounts').innerHTML = data.accounts.map(a => `
+    <div class="settings-row" onclick="editAccount('${a.id}')">
+      <div class="sr-left">
+        <div class="sr-title">${a.name}</div>
+        <div class="sr-sub">Balance: ${fmt(a.balance)}</div>
+      </div>
+      <div class="sr-right">${fmt(a.balance)} ›</div>
+    </div>
+  `).join('');
+
+  document.getElementById('settings-income').innerHTML = data.income.map(item => `
+    <div class="settings-row" onclick="editItem('income','${item.id}')">
+      <div class="sr-left">
+        <div class="sr-title">${item.name}</div>
+        <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
+      </div>
+      <div class="sr-right" style="color:${item.active?'var(--income)':'var(--muted)'}">
+        ${item.active ? '●' : '○'} ›
+      </div>
+    </div>
+  `).join('') || '<div class="settings-row" style="color:var(--muted)"><div class="sr-left"><div class="sr-title">No income sources</div></div></div>';
+
+  document.getElementById('settings-bills').innerHTML = data.bills.map(item => `
+    <div class="settings-row" onclick="editItem('bill','${item.id}')">
+      <div class="sr-left">
+        <div class="sr-title">${item.name}</div>
+        <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
+      </div>
+      <div class="sr-right" style="color:${item.active?'var(--expense)':'var(--muted)'}">
+        ${item.active ? '●' : '○'} ›
+      </div>
+    </div>
+  `).join('');
+
+  // Sync settings
+  const methodLabel = sync.method === 'drive' ? 'Google Drive' :
+                      sync.method === 'filesystem' ? 'Local File' : 'Not connected';
+  const statusColor = sync.status === 'idle' ? 'var(--income)' :
+                      sync.status === 'error' ? 'var(--expense)' : 'var(--muted)';
+  const lastSyncedStr = sync.lastSynced
+    ? new Date(sync.lastSynced).toLocaleString('en-CA', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
+    : 'Never';
+
+  document.getElementById('settings-sync').innerHTML = `
+    <div class="settings-row" onclick="openSyncModal()">
+      <div class="sr-left">
+        <div class="sr-title">Sync Method</div>
+        <div class="sr-sub">Last synced: ${lastSyncedStr}</div>
+      </div>
+      <div class="sr-right" style="color:${statusColor}">${methodLabel} ›</div>
+    </div>
+  `;
+}
+
+function recurrenceLabel(item) {
+  switch(item.recurrence) {
+    case 'weekly': return 'Weekly';
+    case 'biweekly': return 'Bi-weekly';
+    case 'monthly': return `Monthly (${ordinal(item.dayOfMonth)})`;
+    case 'twicemonthly': return `Twice/month (${(item.daysOfMonth||[]).map(ordinal).join(' & ')})`;
+    case 'once': return 'One time';
+    default: return item.recurrence;
+  }
+}
+
+function ordinal(n) {
+  if (!n) return '?';
+  const s = ['th','st','nd','rd'], v = n % 100;
+  return n + (s[(v-20)%10]||s[v]||s[0]);
+}
+
+// ===== NAVIGATION =====
+function openPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  const nb = document.getElementById(`nav-${name}`);
+  if (nb) nb.classList.add('active');
+  if (name === 'home') renderHome();
+  else if (name === 'budget') renderBudget();
+  else if (name === 'settings') renderSettings();
+}
+
+// ===== EDIT ACCOUNT =====
+function editAccount(id) {
+  editAccountId = id;
+  const a = data.accounts.find(a => a.id === id);
+  if (!a) return;
+  document.getElementById('ea-name').value = a.name;
+  document.getElementById('ea-balance').value = a.balance;
+  document.getElementById('edit-account-overlay').classList.add('open');
+}
+
+function saveAccount() {
+  const a = data.accounts.find(a => a.id === editAccountId);
+  if (!a) return;
+  a.name = document.getElementById('ea-name').value.trim() || a.name;
+  a.balance = parseFloat(document.getElementById('ea-balance').value) || 0;
+  saveData();
+  closeModal('edit-account-overlay');
+  renderSettings();
+  showToast('Account updated');
+}
+
+// ===== EDIT ITEM =====
+function editItem(type, id) {
+  editItemType = type; editItemId = id;
+  const list = type === 'income' ? data.income : data.bills;
+  const item = list.find(i => i.id === id);
+  if (!item) return;
+  document.getElementById('edit-item-title').textContent = item.name;
+  const catOpts = type === 'bill' ?
+    ['housing','utilities','insurance','debt','credit','other'].map(c =>
+      `<option value="${c}" ${item.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
+    ).join('') : '';
+  document.getElementById('edit-item-body').innerHTML = `
+    <div class="edit-fields">
+      <div class="form-group"><label>Name</label><input id="ei-name" type="text" value="${item.name}"></div>
+      <div class="form-group"><label>Amount (CAD)</label><input id="ei-amount" type="number" step="0.01" value="${item.amount}"></div>
+      <div class="form-group"><label>Account</label><select id="ei-account">
+        ${data.accounts.map(a => `<option value="${a.id}" ${item.account===a.id?'selected':''}>${a.name}</option>`).join('')}
+      </select></div>
+      ${type === 'bill' ? `<div class="form-group"><label>Category</label><select id="ei-category">${catOpts}</select></div>` : ''}
+      <div class="form-group"><label>Recurrence</label><select id="ei-recurrence">
+        <option value="weekly" ${item.recurrence==='weekly'?'selected':''}>Weekly</option>
+        <option value="biweekly" ${item.recurrence==='biweekly'?'selected':''}>Bi-weekly</option>
+        <option value="monthly" ${item.recurrence==='monthly'?'selected':''}>Monthly</option>
+        <option value="twicemonthly" ${item.recurrence==='twicemonthly'?'selected':''}>Twice a month</option>
+        <option value="once" ${item.recurrence==='once'?'selected':''}>One time</option>
+      </select></div>
+      <div class="form-group">
+        <label>Day of Month</label><input id="ei-dayofmonth" type="number" min="1" max="31" value="${item.dayOfMonth||item.daysOfMonth?.[0]||1}">
+      </div>
+      <div class="form-group">
+        <label>Start Date</label><input id="ei-startdate" type="date" value="${item.startDate||''}">
+      </div>
+      <div class="toggle-row">
+        <span>Active</span>
+        <label class="toggle"><input type="checkbox" id="ei-active" ${item.active?'checked':''}><span class="slider"></span></label>
+      </div>
+    </div>
+  `;
+  document.getElementById('edit-item-overlay').classList.add('open');
+}
+
+function saveItem() {
+  const list = editItemType === 'income' ? data.income : data.bills;
+  const item = list.find(i => i.id === editItemId);
+  if (!item) return;
+  item.name = document.getElementById('ei-name').value.trim() || item.name;
+  item.amount = parseFloat(document.getElementById('ei-amount').value) || item.amount;
+  item.account = document.getElementById('ei-account').value;
+  item.recurrence = document.getElementById('ei-recurrence').value;
+  if (editItemType === 'bill') item.category = document.getElementById('ei-category').value;
+  const dom = parseInt(document.getElementById('ei-dayofmonth').value);
+  if (!isNaN(dom)) item.dayOfMonth = dom;
+  const sd = document.getElementById('ei-startdate').value;
+  if (sd) item.startDate = sd;
+  item.active = document.getElementById('ei-active').checked;
+  saveData();
+  closeModal('edit-item-overlay');
+  renderSettings();
+  showToast('Saved');
+}
+
+function deleteItem() {
+  if (!confirm(`Delete "${editItemId}"?`)) return;
+  if (editItemType === 'income') data.income = data.income.filter(i => i.id !== editItemId);
+  else data.bills = data.bills.filter(i => i.id !== editItemId);
+  saveData();
+  closeModal('edit-item-overlay');
+  renderSettings();
+  showToast('Deleted');
+}
+
+// ===== WIZARD =====
+function openWizard() {
+  wizardState = {
+    step: 1, type: null, name: '', amount: 0,
+    account: data.accounts[0]?.id, recurrence: 'monthly',
+    dayOfMonth: 1, daysOfMonth: [1, 15],
+    startDate: isoDate(today()), category: 'other', active: true
+  };
+  renderWizardStep();
+  document.getElementById('wizard-overlay').classList.add('open');
+}
+
+function renderWizardStep() {
+  document.getElementById('wizard-steps').innerHTML = Array.from({length:4}, (_,i) =>
+    `<div class="step ${i < wizardState.step ? 'done' : ''}"></div>`
+  ).join('');
+  const titles = ['','What type?','Details','Schedule','Review'];
+  document.getElementById('wizard-title').textContent = titles[wizardState.step] || 'Add';
+  const body = document.getElementById('wizard-body');
+
+  if (wizardState.step === 1) {
+    body.innerHTML = `
+      <div class="type-picker">
+        <div class="type-btn ${wizardState.type==='income'?'selected income':''}" onclick="setWizardType('income')">
+          <span class="tb-icon">💰</span>Income
+        </div>
+        <div class="type-btn ${wizardState.type==='expense'?'selected expense':''}" onclick="setWizardType('expense')">
+          <span class="tb-icon">💸</span>Bill / Expense
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:24px">
+        <button class="btn btn-secondary" onclick="closeModal('wizard-overlay')">Cancel</button>
+        <button class="btn btn-primary" onclick="wizardNext()" ${!wizardState.type?'disabled':''}>Next</button>
+      </div>
+    `;
+  } else if (wizardState.step === 2) {
+    const catOpts = wizardState.type === 'expense' ?
+      ['housing','utilities','insurance','debt','credit','other'].map(c =>
+        `<option value="${c}" ${wizardState.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
+      ).join('') : '';
+    body.innerHTML = `
+      <div class="form-group"><label>Name</label>
+        <input id="w-name" type="text" placeholder="e.g. Netflix" value="${wizardState.name}" oninput="wizardState.name=this.value">
+      </div>
+      <div class="form-group"><label>Amount (CAD)</label>
+        <input id="w-amount" type="number" step="0.01" placeholder="0.00" value="${wizardState.amount||''}" oninput="wizardState.amount=parseFloat(this.value)||0">
+      </div>
+      <div class="form-group"><label>Account</label>
+        <select onchange="wizardState.account=this.value">
+          ${data.accounts.map(a => `<option value="${a.id}" ${wizardState.account===a.id?'selected':''}>${a.name}</option>`).join('')}
+        </select>
+      </div>
+      ${wizardState.type==='expense' ? `<div class="form-group"><label>Category</label><select onchange="wizardState.category=this.value">${catOpts}</select></div>` : ''}
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="wizardBack()">Back</button>
+        <button class="btn btn-primary" onclick="wizardNext()">Next</button>
+      </div>
+    `;
+  } else if (wizardState.step === 3) {
+    body.innerHTML = `
+      <div class="form-group"><label>How often?</label>
+        <div class="pills">
+          ${[['once','One time'],['weekly','Weekly'],['biweekly','Bi-weekly'],['monthly','Monthly'],['twicemonthly','Twice/month']].map(([v,l]) =>
+            `<div class="pill ${wizardState.recurrence===v?'selected':''}" onclick="setWizardRec('${v}')">${l}</div>`
+          ).join('')}
+        </div>
+      </div>
+      <div id="w-schedule-fields"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="wizardBack()">Back</button>
+        <button class="btn btn-primary" onclick="wizardNext()">Next</button>
+      </div>
+    `;
+    renderWizardScheduleFields();
+  } else if (wizardState.step === 4) {
+    body.innerHTML = `
+      <div class="card" style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:18px;font-weight:700">${wizardState.name || '(unnamed)'}</div>
+          <div style="font-size:20px;font-weight:700;color:${wizardState.type==='income'?'var(--income)':'var(--expense)'}">
+            ${wizardState.type==='income'?'+':'-'}${fmt(wizardState.amount)}
+          </div>
+        </div>
+        <div style="color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:6px">
+          <div>Account: ${getAccount(wizardState.account).name}</div>
+          <div>Schedule: ${recurrenceLabel(wizardState)}</div>
+          ${wizardState.type==='expense'?`<div>Category: ${wizardState.category}</div>`:''}
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="wizardBack()">Back</button>
+        <button class="btn btn-primary" onclick="wizardSave()">Save</button>
+      </div>
+    `;
+  }
+}
+
+function renderWizardScheduleFields() {
+  const c = document.getElementById('w-schedule-fields');
+  if (!c) return;
+  const r = wizardState.recurrence;
+  if (r === 'weekly' || r === 'biweekly' || r === 'once') {
+    c.innerHTML = `<div class="form-group"><label>Start Date</label>
+      <input type="date" value="${wizardState.startDate}" onchange="wizardState.startDate=this.value">
+    </div>`;
+  } else if (r === 'monthly') {
+    c.innerHTML = `<div class="form-group"><label>Day of Month</label>
+      <input type="number" min="1" max="31" value="${wizardState.dayOfMonth}" onchange="wizardState.dayOfMonth=parseInt(this.value)||1">
+    </div>`;
+  } else if (r === 'twicemonthly') {
+    c.innerHTML = `<div class="form-group"><label>First Day</label>
+      <input type="number" min="1" max="31" value="${wizardState.daysOfMonth[0]}" onchange="wizardState.daysOfMonth[0]=parseInt(this.value)||1">
+    </div>
+    <div class="form-group"><label>Second Day</label>
+      <input type="number" min="1" max="31" value="${wizardState.daysOfMonth[1]}" onchange="wizardState.daysOfMonth[1]=parseInt(this.value)||15">
+    </div>`;
+  }
+}
+
+function setWizardType(t) { wizardState.type = t; renderWizardStep(); }
+function setWizardRec(r) { wizardState.recurrence = r; renderWizardStep(); }
+function wizardNext() {
+  if (wizardState.step === 1 && !wizardState.type) return;
+  if (wizardState.step === 2 && !wizardState.name) { showToast('Enter a name'); return; }
+  wizardState.step++; renderWizardStep();
+}
+function wizardBack() { wizardState.step--; renderWizardStep(); }
+
+function wizardSave() {
+  const id = 'item-' + Date.now();
+  const newItem = {
+    id, name: wizardState.name, amount: wizardState.amount,
+    account: wizardState.account, recurrence: wizardState.recurrence,
+    startDate: wizardState.startDate, dayOfMonth: wizardState.dayOfMonth,
+    daysOfMonth: wizardState.daysOfMonth, active: true
+  };
+  if (wizardState.type === 'income') {
+    data.income.push(newItem);
+  } else {
+    newItem.category = wizardState.category;
+    data.bills.push(newItem);
+  }
+  saveData();
+  closeModal('wizard-overlay');
+  renderHome();
+  showToast(`${wizardState.name} added!`);
+}
+
+// ===== MODALS =====
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+document.querySelectorAll('.modal-overlay').forEach(ov => {
+  ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+});
+
+// ===== DATA IMPORT / EXPORT =====
+function exportData() {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `finances-${isoDate(new Date())}.json`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported!');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!imported.accounts || !imported.bills) throw new Error('Invalid');
+      data = imported;
+      saveData();
+      renderHome(); renderSettings();
+      showToast('Data imported!');
+    } catch(err) { showToast('Import failed — invalid file'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function resetConfirm() {
+  if (!confirm('Reset all data to defaults? This cannot be undone.')) return;
+  localStorage.removeItem('pf_data_v2');
+  loadData();
+  renderHome(); renderSettings();
+  showToast('Reset to defaults');
+}
+
+// ===== TOAST =====
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== INIT =====
+loadData();
+initSync().then(() => {
+  renderHome();
+});
+</script>
+</body>
+</html>
