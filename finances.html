@@ -132,6 +132,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .cat-credit{background:rgba(249,115,22,.2);color:#fb923c}
 .cat-income{background:rgba(34,197,94,.2);color:#4ade80}
 .cat-other{background:rgba(148,163,184,.2);color:#94a3b8}
+/* PIN lock */
+#pin-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px}
+.pin-title{font-size:22px;font-weight:700;margin-bottom:8px;text-align:center}
+.pin-sub{font-size:14px;color:var(--muted);margin-bottom:40px;text-align:center}
+.pin-dots{display:flex;gap:16px;margin-bottom:16px}
+.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:background .15s}
+.pin-dot.filled{background:var(--text);border-color:var(--text)}
+.pin-dot.error{background:var(--expense);border-color:var(--expense)}
+.pin-error{color:var(--expense);font-size:13px;margin-bottom:20px;min-height:18px;text-align:center}
+.pin-numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:280px}
+.pin-key{background:var(--surface);border:1px solid var(--border);border-radius:50%;width:72px;height:72px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;cursor:pointer;margin:0 auto;transition:background .1s;-webkit-tap-highlight-color:transparent;user-select:none}
+.pin-key:active{background:var(--surface2)}
+.pin-key.del{font-size:18px}
+.pin-key.empty{visibility:hidden;pointer-events:none}
 /* Sync styles */
 .sync-icon-btn{position:relative}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -146,6 +160,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 </style>
 </head>
 <body>
+<div id="pin-screen">
+  <div style="font-size:48px;margin-bottom:16px">🔒</div>
+  <div class="pin-title" id="pin-title">Enter PIN</div>
+  <div class="pin-sub" id="pin-sub">Personal Finances</div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="pd0"></div>
+    <div class="pin-dot" id="pd1"></div>
+    <div class="pin-dot" id="pd2"></div>
+    <div class="pin-dot" id="pd3"></div>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+  <div class="pin-numpad">
+    <div class="pin-key" onclick="pinKey('1')">1</div>
+    <div class="pin-key" onclick="pinKey('2')">2</div>
+    <div class="pin-key" onclick="pinKey('3')">3</div>
+    <div class="pin-key" onclick="pinKey('4')">4</div>
+    <div class="pin-key" onclick="pinKey('5')">5</div>
+    <div class="pin-key" onclick="pinKey('6')">6</div>
+    <div class="pin-key" onclick="pinKey('7')">7</div>
+    <div class="pin-key" onclick="pinKey('8')">8</div>
+    <div class="pin-key" onclick="pinKey('9')">9</div>
+    <div class="pin-key empty"></div>
+    <div class="pin-key" onclick="pinKey('0')">0</div>
+    <div class="pin-key del" onclick="pinDel()">⌫</div>
+  </div>
+</div>
 <div id="app">
   <div class="header">
     <div>
@@ -205,6 +245,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <div class="settings-section" id="settings-bills"></div>
     <div class="section-title">Sync</div>
     <div class="settings-section" id="settings-sync"></div>
+    <div class="section-title">Security</div>
+    <div class="settings-section">
+      <div class="settings-row" onclick="changePin()">
+        <div class="sr-left"><div class="sr-title">Change PIN</div><div class="sr-sub">Update your app lock PIN</div></div>
+        <div class="sr-right">🔐</div>
+      </div>
+    </div>
     <div class="section-title">Data</div>
     <div class="settings-section">
       <div class="settings-row" onclick="exportData()">
@@ -1414,7 +1461,109 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+// ===== PIN LOCK =====
+let pinBuffer = '';
+let pinSetupPhase = 0;
+let pinSetupFirst = '';
+
+function initPin() {
+  const stored = localStorage.getItem('pf_pin');
+  if (!stored) {
+    showPinSetup();
+  } else {
+    showPinEntry();
+  }
+}
+
+function showPinSetup() {
+  pinBuffer = '';
+  pinSetupPhase = 0;
+  pinSetupFirst = '';
+  document.getElementById('pin-title').textContent = 'Create a PIN';
+  document.getElementById('pin-sub').textContent = 'Choose a 4-digit PIN to protect your finances';
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-screen').style.display = 'flex';
+  updatePinDots();
+}
+
+function showPinEntry() {
+  pinBuffer = '';
+  document.getElementById('pin-title').textContent = 'Enter PIN';
+  document.getElementById('pin-sub').textContent = 'Personal Finances';
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-screen').style.display = 'flex';
+  updatePinDots();
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('pd' + i);
+    dot.classList.toggle('filled', i < pinBuffer.length);
+    dot.classList.remove('error');
+  }
+}
+
+function pinKey(k) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += k;
+  updatePinDots();
+  if (pinBuffer.length === 4) setTimeout(handlePinComplete, 100);
+}
+
+function pinDel() {
+  if (!pinBuffer.length) return;
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+}
+
+function handlePinComplete() {
+  const stored = localStorage.getItem('pf_pin');
+  if (!stored) {
+    if (pinSetupPhase === 0) {
+      pinSetupFirst = pinBuffer;
+      pinBuffer = '';
+      pinSetupPhase = 1;
+      document.getElementById('pin-title').textContent = 'Confirm PIN';
+      document.getElementById('pin-sub').textContent = 'Enter your PIN again to confirm';
+      document.getElementById('pin-error').textContent = '';
+      updatePinDots();
+    } else {
+      if (pinBuffer === pinSetupFirst) {
+        localStorage.setItem('pf_pin', pinBuffer);
+        unlockApp();
+      } else {
+        showPinError("PINs don't match — try again");
+        pinSetupPhase = 0;
+        pinSetupFirst = '';
+      }
+    }
+  } else {
+    if (pinBuffer === stored) {
+      unlockApp();
+    } else {
+      showPinError('Incorrect PIN');
+    }
+  }
+}
+
+function showPinError(msg) {
+  document.getElementById('pin-error').textContent = msg;
+  for (let i = 0; i < 4; i++) document.getElementById('pd' + i).classList.add('error');
+  pinBuffer = '';
+  setTimeout(updatePinDots, 600);
+}
+
+function unlockApp() {
+  document.getElementById('pin-screen').style.display = 'none';
+}
+
+function changePin() {
+  localStorage.removeItem('pf_pin');
+  showPinSetup();
+}
+
 // ===== INIT =====
+initPin();
 loadData();
 initSync().then(() => {
   renderHome();
