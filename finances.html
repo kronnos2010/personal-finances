@@ -305,41 +305,9 @@ const CONFIG = {
 const DEFAULT_DATA = {
   version: 2,
   lastModified: 0,
-  accounts: [
-    { id: 'td', name: 'TD Bank', balance: 0 },
-    { id: 'jo-tan', name: 'Johanna Tangerine', balance: 363.99 },
-    { id: 'dav-tan', name: 'David Tangerine', balance: 1535.88 }
-  ],
-  income: [
-    { id: 'dav-pay', name: "David's Pay", amount: 1573.10, account: 'dav-tan',
-      recurrence: 'weekly', startDate: '2026-01-02', active: true }
-  ],
-  bills: [
-    { id: 'mortgage', name: 'Mortgage', amount: 366.09, account: 'td',
-      category: 'housing', recurrence: 'weekly', startDate: '2026-01-06', active: true },
-    { id: 'bell', name: 'Bell Mobility/Internet', amount: 108.48, account: 'dav-tan',
-      category: 'utilities', recurrence: 'monthly', dayOfMonth: 6, active: true },
-    { id: 'car-ins', name: 'Car & Home Insurance', amount: 425.06, account: 'dav-tan',
-      category: 'insurance', recurrence: 'monthly', dayOfMonth: 12, active: true },
-    { id: 'life-ins', name: 'Life Insurance', amount: 55.20, account: 'dav-tan',
-      category: 'insurance', recurrence: 'monthly', dayOfMonth: 9, active: true },
-    { id: 'paybright', name: 'Paybright', amount: 46.61, account: 'dav-tan',
-      category: 'debt', recurrence: 'monthly', dayOfMonth: 7, active: true },
-    { id: 'acc-ins', name: 'Accident Insurance', amount: 8.59, account: 'dav-tan',
-      category: 'insurance', recurrence: 'monthly', dayOfMonth: 8, active: true },
-    { id: 'osap-d', name: 'OSAP David', amount: 304.72, account: 'dav-tan',
-      category: 'debt', recurrence: 'monthly', dayOfMonth: 31, active: true },
-    { id: 'osap-j', name: 'OSAP Johanna', amount: 67.44, account: 'jo-tan',
-      category: 'debt', recurrence: 'monthly', dayOfMonth: 31, active: true },
-    { id: 'hydro', name: 'Alectra Hydro', amount: 95.00, account: 'dav-tan',
-      category: 'utilities', recurrence: 'monthly', dayOfMonth: 16, active: true },
-    { id: 'gas', name: 'Gas', amount: 96.00, account: 'dav-tan',
-      category: 'utilities', recurrence: 'monthly', dayOfMonth: 12, active: true },
-    { id: 'jo-cc', name: 'Johanna CC', amount: 200.00, account: 'jo-tan',
-      category: 'credit', recurrence: 'monthly', dayOfMonth: 20, active: true },
-    { id: 'dav-cc', name: 'David CC', amount: 2500.00, account: 'dav-tan',
-      category: 'credit', recurrence: 'monthly', dayOfMonth: 16, active: true }
-  ]
+  accounts: [],
+  income: [],
+  bills: []
 };
 
 let data = null;
