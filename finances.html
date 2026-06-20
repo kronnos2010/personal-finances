@@ -1530,6 +1530,8 @@ function handlePinComplete() {
     } else {
       if (pinBuffer === pinSetupFirst) {
         localStorage.setItem('pf_pin', pinBuffer);
+        data.pin = pinBuffer;
+        saveData();
         unlockApp();
       } else {
         showPinError("PINs don't match — try again");
@@ -1559,6 +1561,8 @@ function unlockApp() {
 
 function changePin() {
   localStorage.removeItem('pf_pin');
+  data.pin = null;
+  saveData();
   showPinSetup();
 }
 
@@ -1566,6 +1570,10 @@ function changePin() {
 initPin();
 loadData();
 initSync().then(() => {
+  if (data.pin && !localStorage.getItem('pf_pin')) {
+    localStorage.setItem('pf_pin', data.pin);
+    if (document.getElementById('pin-screen').style.display === 'flex') showPinEntry();
+  }
   renderHome();
 });
 </script>
