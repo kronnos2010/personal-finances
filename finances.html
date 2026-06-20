@@ -1104,7 +1104,7 @@ function renderHome() {
   const sd = document.getElementById('sidebar-date');
   if (sd) sd.textContent = dateStr;
 
-  const to90 = new Date(t); to90.setDate(to90.getDate() + 90);
+  const to90 = new Date(t.getFullYear(), 11, 31);
   const events = getEvents(t, to90);
   const to30 = new Date(t); to30.setDate(to30.getDate() + 30);
   const projMap = {};
