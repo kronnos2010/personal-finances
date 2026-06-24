@@ -45,25 +45,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .tl-dot.income{background:var(--income)}
 .tl-dot.expense{background:var(--expense)}
-/* Variable / estimated */
-.tl-dot.estimated{background:var(--warn)}
-.tl-amount.estimated{color:var(--warn)}
-.tl-item.estimated-row{cursor:pointer}
-.tl-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:10px 4px}
-.est-label{font-size:10px;color:var(--warn);font-weight:600;letter-spacing:.3px}
-/* Needs review */
-.needs-review-wrap{margin:0 20px 8px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);overflow:hidden}
-.needs-review-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(245,158,11,.2)}
-.needs-review-hdr-title{font-size:13px;font-weight:600;color:var(--warn)}
-.needs-review-count{font-size:11px;color:var(--warn);font-weight:700;background:rgba(245,158,11,.2);padding:2px 8px;border-radius:10px}
-.nr-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(245,158,11,.1);cursor:pointer;transition:background .15s}
-.nr-item:last-child{border-bottom:none}
-.nr-item:hover{background:rgba(245,158,11,.1)}
-.nr-item-name{flex:1;font-size:14px;font-weight:500}
-.nr-item-right{text-align:right}
-.nr-item-amt{font-size:13px;color:var(--warn);font-weight:600;display:block}
-.nr-item-month{font-size:11px;color:var(--muted)}
-.nr-update-btn{font-size:12px;color:var(--warn);padding:5px 12px;border:1px solid rgba(245,158,11,.4);border-radius:6px;background:none;cursor:pointer;font-weight:600;white-space:nowrap;flex-shrink:0}
 .tl-info{flex:1;min-width:0}
 .tl-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl-acct{font-size:11px;color:var(--muted)}
@@ -150,7 +131,27 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .cat-debt{background:rgba(239,68,68,.2);color:#f87171}
 .cat-credit{background:rgba(249,115,22,.2);color:#fb923c}
 .cat-income{background:rgba(34,197,94,.2);color:#4ade80}
+.cat-education{background:rgba(20,184,166,.2);color:#2dd4bf}
 .cat-other{background:rgba(148,163,184,.2);color:#94a3b8}
+/* Variable / estimated */
+.tl-dot.estimated{background:var(--warn)}
+.tl-amount.estimated{color:var(--warn)}
+.tl-item.estimated-row{cursor:pointer}
+.tl-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:10px 4px}
+.est-label{font-size:10px;color:var(--warn);font-weight:600;letter-spacing:.3px}
+/* Needs review */
+.needs-review-wrap{margin:0 20px 8px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);overflow:hidden}
+.needs-review-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(245,158,11,.2)}
+.needs-review-hdr-title{font-size:13px;font-weight:600;color:var(--warn)}
+.needs-review-count{font-size:11px;color:var(--warn);font-weight:700;background:rgba(245,158,11,.2);padding:2px 8px;border-radius:10px}
+.nr-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(245,158,11,.1);cursor:pointer;transition:background .15s}
+.nr-item:last-child{border-bottom:none}
+.nr-item:hover{background:rgba(245,158,11,.1)}
+.nr-item-name{flex:1;font-size:14px;font-weight:500}
+.nr-item-right{text-align:right}
+.nr-item-amt{font-size:13px;color:var(--warn);font-weight:600;display:block}
+.nr-item-month{font-size:11px;color:var(--muted)}
+.nr-update-btn{font-size:12px;color:var(--warn);padding:5px 12px;border:1px solid rgba(245,158,11,.4);border-radius:6px;background:none;cursor:pointer;font-weight:600;white-space:nowrap;flex-shrink:0}
 /* PIN lock */
 #pin-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px}
 .pin-title{font-size:22px;font-weight:700;margin-bottom:8px;text-align:center}
@@ -182,6 +183,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
 /* ===== DESKTOP ===== */
 @media(min-width:768px){
+  .needs-review-wrap{margin:0 24px 8px}
   #app{flex-direction:row;max-width:none;height:100vh}
   .main-area{display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0}
 
@@ -259,7 +261,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .timeline{padding:0 24px}
   .tl-item{padding:12px 0}
   .tl-name{font-size:15px}
-  .needs-review-wrap{margin:0 24px 8px}
 
   /* Budget */
   .month-nav{padding:16px 40px}
@@ -281,6 +282,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .modal-overlay{align-items:center}
   .modal{border-radius:16px;max-width:520px;margin:0 auto}
 }
+/* Variable/estimated expense styles */
+.tl-dot.estimated{background:var(--warn)}
+.tl-amount.estimated{color:var(--warn)}
+.needs-review-item{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.needs-review-item:last-child{border-bottom:none}
+.needs-review-item:active{background:var(--surface2)}
+.needs-review-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:0 20px 4px}
 </style>
 </head>
 <body>
@@ -365,13 +373,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="home-panel home-panel-left">
         <div class="section-title">Accounts</div>
         <div class="accounts-scroll" id="accounts-list"></div>
-        <div id="needs-review-wrap" class="needs-review-wrap" style="display:none"></div>
+        <div id="needs-review-wrap"></div>
       </div>
       <div class="home-panel home-panel-right">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
           <span>Upcoming</span>
           <span style="font-size:12px;color:var(--muted);padding-right:20px" id="combined-balance"></span>
         </div>
+        <div id="needs-review-wrap" class="needs-review-wrap" style="display:none"></div>
         <div class="timeline" id="timeline"></div>
       </div>
     </div>
@@ -399,8 +408,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <div class="settings-section" id="settings-accounts"></div>
     <div class="section-title">Income Sources</div>
     <div class="settings-section" id="settings-income"></div>
-    <div class="section-title">Bills &amp; Payments</div>
-    <div class="settings-section" id="settings-bills"></div>
+    <div id="settings-bills"></div>
     <div class="section-title">Sync</div>
     <div class="settings-section" id="settings-sync"></div>
     <div class="section-title">Security</div>
@@ -509,6 +517,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     </div>
     <div class="btn-row">
       <button class="btn btn-secondary" id="cv-reset-btn" onclick="resetConfirmedVar()" style="display:none">Reset to avg</button>
+      <button class="btn btn-secondary" onclick="closeModal('confirm-var-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveConfirmedVar()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM VARIABLE MODAL -->
+<div class="modal-overlay" id="confirm-var-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="cv-title">Confirm Amount</h2>
+    <div style="font-size:12px;color:var(--muted);margin:-12px 0 20px" id="cv-month"></div>
+    <div class="edit-fields">
+      <div class="form-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Due Day of Month</label><input id="cv-day" type="number" min="1" max="31"></div>
+    </div>
+    <div class="btn-row">
       <button class="btn btn-secondary" onclick="closeModal('confirm-var-overlay')">Cancel</button>
       <button class="btn btn-primary" onclick="saveConfirmedVar()">Confirm</button>
     </div>
@@ -1158,8 +1183,15 @@ function getAccount(id) {
 }
 const CAT_ICON = {
   housing:'🏠', utilities:'💡', insurance:'🛡️', debt:'📋',
-  credit:'💳', income:'💰', other:'📦'
+  credit:'💳', income:'💰', education:'🎓', other:'📦'
 };
+
+const BILL_GROUPS = [
+  { title: 'House Expenses',  cats: ['housing', 'insurance'] },
+  { title: 'Education',       cats: ['education'] },
+  { title: 'Utility Bills',   cats: ['utilities'] },
+  { title: 'Other Expenses',  cats: ['debt', 'credit', 'other'] },
+];
 
 // ===== RENDER HOME =====
 function renderHome() {
@@ -1194,6 +1226,8 @@ function renderHome() {
 
   document.getElementById('combined-balance').textContent = `Total: ${fmt(totalBalance)}`;
 
+  renderNeedsReview();
+
   const tl = document.getElementById('timeline');
   if (events.length === 0) {
     tl.innerHTML = '<div class="empty"><div class="em-icon">📅</div><p>No upcoming payments found</p></div>';
@@ -1208,8 +1242,6 @@ function renderHome() {
   }
 
   let running = totalBalance;
-  renderNeedsReview();
-
   tl.innerHTML = Object.entries(grouped).map(([dateStr, evs]) => {
     const d = parseDate(dateStr);
     const netDay = evs.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
@@ -1404,17 +1436,31 @@ function renderSettings() {
     </div>
   `).join('') || '<div class="settings-row" style="color:var(--muted)"><div class="sr-left"><div class="sr-title">No income sources</div></div></div>';
 
-  document.getElementById('settings-bills').innerHTML = data.bills.map(item => `
+  const assignedCats = new Set(BILL_GROUPS.flatMap(g => g.cats));
+  const billRow = item => `
     <div class="settings-row" onclick="editItem('bill','${item.id}')">
       <div class="sr-left">
-        <div class="sr-title">${item.name}</div>
-        <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
+        <div class="sr-title">${item.name}${item.type === 'variable' ? ' <span style="font-size:10px;color:var(--warn);font-weight:600;vertical-align:middle">VAR</span>' : ''}</div>
+        <div class="sr-sub">${item.type === 'variable' ? '~' : ''}${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
       </div>
-      <div class="sr-right" style="color:${item.active?'var(--expense)':'var(--muted)'}">
+      <div class="sr-right" style="color:${item.active ? 'var(--expense)' : 'var(--muted)'}">
         ${item.active ? '●' : '○'} ›
       </div>
-    </div>
-  `).join('');
+    </div>`;
+
+  const groupedHTML = BILL_GROUPS.map(group => {
+    const bills = data.bills.filter(b => group.cats.includes(b.category || ''));
+    if (!bills.length) return '';
+    return `<div class="section-title">${group.title}</div>
+    <div class="settings-section">${bills.map(billRow).join('')}</div>`;
+  }).join('');
+
+  const otherBills = data.bills.filter(b => !assignedCats.has(b.category || ''));
+  const otherHTML = otherBills.length
+    ? `<div class="section-title">Other Expenses</div><div class="settings-section">${otherBills.map(billRow).join('')}</div>`
+    : '';
+
+  document.getElementById('settings-bills').innerHTML = groupedHTML + otherHTML;
 
   // Sync settings
   const methodLabel = sync.method === 'drive' ? 'Google Drive' :
@@ -1497,7 +1543,7 @@ function editItem(type, id) {
   if (!item) return;
   document.getElementById('edit-item-title').textContent = item.name;
   const catOpts = type === 'bill' ?
-    ['housing','utilities','insurance','debt','credit','other'].map(c =>
+    ['housing','utilities','insurance','education','debt','credit','other'].map(c =>
       `<option value="${c}" ${item.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
     ).join('') : '';
   document.getElementById('edit-item-body').innerHTML = `
@@ -1609,7 +1655,7 @@ function renderWizardStep() {
     `;
   } else if (wizardState.step === 2) {
     const catOpts = wizardState.type === 'expense' ?
-      ['housing','utilities','insurance','debt','credit','other'].map(c =>
+      ['housing','utilities','insurance','education','debt','credit','other'].map(c =>
         `<option value="${c}" ${wizardState.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
       ).join('') : '';
     body.innerHTML = `
