@@ -132,6 +132,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .cat-credit{background:rgba(249,115,22,.2);color:#fb923c}
 .cat-income{background:rgba(34,197,94,.2);color:#4ade80}
 .cat-other{background:rgba(148,163,184,.2);color:#94a3b8}
+/* Variable / estimated */
+.tl-dot.estimated{background:var(--warn)}
+.tl-amount.estimated{color:var(--warn)}
+.tl-item.estimated-row{cursor:pointer}
+.tl-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:10px 4px}
+.est-label{font-size:10px;color:var(--warn);font-weight:600;letter-spacing:.3px}
+/* Needs review */
+.needs-review-wrap{margin:0 20px 8px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);overflow:hidden}
+.needs-review-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(245,158,11,.2)}
+.needs-review-hdr-title{font-size:13px;font-weight:600;color:var(--warn)}
+.needs-review-count{font-size:11px;color:var(--warn);font-weight:700;background:rgba(245,158,11,.2);padding:2px 8px;border-radius:10px}
+.nr-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(245,158,11,.1);cursor:pointer;transition:background .15s}
+.nr-item:last-child{border-bottom:none}
+.nr-item:hover{background:rgba(245,158,11,.1)}
+.nr-item-name{flex:1;font-size:14px;font-weight:500}
+.nr-item-right{text-align:right}
+.nr-item-amt{font-size:13px;color:var(--warn);font-weight:600;display:block}
+.nr-item-month{font-size:11px;color:var(--muted)}
+.nr-update-btn{font-size:12px;color:var(--warn);padding:5px 12px;border:1px solid rgba(245,158,11,.4);border-radius:6px;background:none;cursor:pointer;font-weight:600;white-space:nowrap;flex-shrink:0}
 /* PIN lock */
 #pin-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px}
 .pin-title{font-size:22px;font-weight:700;margin-bottom:8px;text-align:center}
@@ -163,6 +182,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
 /* ===== DESKTOP ===== */
 @media(min-width:768px){
+  .needs-review-wrap{margin:0 24px 8px}
   #app{flex-direction:row;max-width:none;height:100vh}
   .main-area{display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0}
 
@@ -351,6 +371,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
           <span>Upcoming</span>
           <span style="font-size:12px;color:var(--muted);padding-right:20px" id="combined-balance"></span>
         </div>
+        <div id="needs-review-wrap" class="needs-review-wrap" style="display:none"></div>
         <div class="timeline" id="timeline"></div>
       </div>
     </div>
@@ -472,6 +493,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <button class="btn btn-danger" onclick="deleteItem()">Delete</button>
       <button class="btn btn-secondary" onclick="closeModal('edit-item-overlay')">Cancel</button>
       <button class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM VARIABLE MODAL -->
+<div class="modal-overlay" id="confirm-var-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="cv-title">Update Bill</h2>
+    <div id="cv-sub" style="color:var(--muted);font-size:13px;margin-bottom:20px"></div>
+    <div class="edit-fields">
+      <div class="form-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Actual Day of Month</label><input id="cv-day" type="number" min="1" max="31"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="cv-reset-btn" onclick="resetConfirmedVar()" style="display:none">Reset to avg</button>
+      <button class="btn btn-secondary" onclick="closeModal('confirm-var-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveConfirmedVar()">Confirm</button>
     </div>
   </div>
 </div>
@@ -1020,18 +1059,34 @@ function lastDayOfMonth(year, month) {
 }
 
 // ===== RECURRENCE ENGINE =====
+// Returns [{date, amount, estimated, monthKey}] — estimated=true means variable with no confirmed override
 function getOccurrences(item, fromDate, toDate) {
   const from = new Date(fromDate); from.setHours(0,0,0,0);
   const to = new Date(toDate); to.setHours(23,59,59,999);
   const results = [];
   if (!item.active) return results;
+  const isVar = item.type === 'variable';
+
+  function mkOcc(d, mk) {
+    const ov = isVar ? (item.overrides || {})[mk] : null;
+    return {
+      date: new Date(d),
+      amount: (ov && ov.confirmed && ov.amount) ? ov.amount : item.amount,
+      estimated: isVar && !(ov && ov.confirmed),
+      monthKey: mk
+    };
+  }
+
   switch (item.recurrence) {
     case 'weekly':
     case 'biweekly': {
       const interval = item.recurrence === 'weekly' ? 7 : 14;
       let d = parseDate(item.startDate);
       while (d < from) d.setDate(d.getDate() + interval);
-      while (d <= to) { results.push(new Date(d)); d.setDate(d.getDate() + interval); }
+      while (d <= to) {
+        results.push(mkOcc(d, isoDate(d).substring(0, 7)));
+        d.setDate(d.getDate() + interval);
+      }
       break;
     }
     case 'monthly': {
@@ -1039,10 +1094,18 @@ function getOccurrences(item, fromDate, toDate) {
       let y = from.getFullYear(), m = from.getMonth();
       if (m === 0) { y--; m = 11; } else m--;
       for (let i = 0; i < 24; i++) {
-        const actualDay = Math.min(dom, lastDayOfMonth(y, m));
+        const mk = `${y}-${String(m+1).padStart(2,'0')}`;
+        const ov = isVar ? (item.overrides || {})[mk] : null;
+        const effDay = (ov && ov.confirmed && ov.dayOfMonth) ? ov.dayOfMonth : dom;
+        const actualDay = Math.min(effDay, lastDayOfMonth(y, m));
         const d = new Date(y, m, actualDay);
         if (d > to) break;
-        if (d >= from) results.push(d);
+        if (d >= from) results.push({
+          date: d,
+          amount: (ov && ov.confirmed && ov.amount) ? ov.amount : item.amount,
+          estimated: isVar && !(ov && ov.confirmed),
+          monthKey: mk
+        });
         m++; if (m > 11) { m = 0; y++; }
       }
       break;
@@ -1052,20 +1115,22 @@ function getOccurrences(item, fromDate, toDate) {
       let y = from.getFullYear(), m = from.getMonth();
       if (m === 0) { y--; m = 11; } else m--;
       for (let i = 0; i < 24; i++) {
+        const mk = `${y}-${String(m+1).padStart(2,'0')}`;
         for (const dom of days) {
           const actualDay = Math.min(dom, lastDayOfMonth(y, m));
           const d = new Date(y, m, actualDay);
           if (d > to) break;
-          if (d >= from) results.push(d);
+          if (d >= from) results.push(mkOcc(d, mk));
         }
         m++; if (m > 11) { m = 0; y++; }
       }
-      results.sort((a, b) => a - b);
+      results.sort((a, b) => a.date - b.date);
       break;
     }
     case 'once': {
       const d = parseDate(item.startDate);
-      if (d >= from && d <= to) results.push(d);
+      const mk = isoDate(d).substring(0, 7);
+      if (d >= from && d <= to) results.push(mkOcc(d, mk));
       break;
     }
   }
@@ -1075,11 +1140,11 @@ function getOccurrences(item, fromDate, toDate) {
 function getEvents(from, to) {
   const events = [];
   for (const item of data.income)
-    for (const d of getOccurrences(item, from, to))
-      events.push({ date: d, type: 'income', item, amount: item.amount });
+    for (const occ of getOccurrences(item, from, to))
+      events.push({ date: occ.date, type: 'income', item, amount: occ.amount, estimated: false, monthKey: occ.monthKey });
   for (const item of data.bills)
-    for (const d of getOccurrences(item, from, to))
-      events.push({ date: d, type: 'expense', item, amount: item.amount });
+    for (const occ of getOccurrences(item, from, to))
+      events.push({ date: occ.date, type: 'expense', item, amount: occ.amount, estimated: occ.estimated, monthKey: occ.monthKey });
   events.sort((a, b) => a.date - b.date);
   return events;
 }
@@ -1129,6 +1194,8 @@ function renderHome() {
 
   document.getElementById('combined-balance').textContent = `Total: ${fmt(totalBalance)}`;
 
+  renderNeedsReview();
+
   const tl = document.getElementById('timeline');
   if (events.length === 0) {
     tl.innerHTML = '<div class="empty"><div class="em-icon">📅</div><p>No upcoming payments found</p></div>';
@@ -1148,18 +1215,25 @@ function renderHome() {
     const netDay = evs.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
     running += netDay;
     const balColor = running < 0 ? 'var(--expense)' : running < 500 ? 'var(--warn)' : 'var(--income)';
-    const items = evs.map(ev => `
-      <div class="tl-item">
-        <div class="tl-dot ${ev.type}"></div>
+    const items = evs.map(ev => {
+      const est = ev.estimated;
+      const dotCls = est ? 'estimated' : ev.type;
+      const amtCls = est ? 'estimated' : ev.type;
+      const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
+      const rowCls = est ? ' estimated-row' : '';
+      const click = est ? `onclick="openConfirmModal('${ev.item.id}','${ev.monthKey}')"` : '';
+      return `
+      <div class="tl-item${rowCls}" ${click}>
+        <div class="tl-dot ${dotCls}"></div>
         <div class="tl-info">
           <div class="tl-name">${ev.item.name}</div>
-          <div class="tl-acct">${getAccount(ev.item.account).name}</div>
+          <div class="tl-acct">${getAccount(ev.item.account).name}${est ? ' <span class="est-label">· est.</span>' : ''}</div>
         </div>
         <div>
-          <div class="tl-amount ${ev.type}">${ev.type === 'income' ? '+' : '-'}${fmt(ev.amount)}</div>
+          <div class="tl-amount ${amtCls}">${prefix}${fmt(ev.amount)}</div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     return `
       <div class="tl-group">
         <div class="tl-date-header">
@@ -1170,6 +1244,85 @@ function renderHome() {
       </div>
     `;
   }).join('');
+}
+
+// ===== NEEDS REVIEW =====
+function renderNeedsReview() {
+  const wrap = document.getElementById('needs-review-wrap');
+  if (!wrap) return;
+  const t = today();
+  const to = new Date(t.getFullYear(), t.getMonth() + 2, 0); // end of next month
+  const pending = [];
+  for (const bill of data.bills) {
+    if (bill.type !== 'variable' || !bill.active) continue;
+    for (const occ of getOccurrences(bill, t, to)) {
+      if (occ.estimated) pending.push({ bill, occ });
+    }
+  }
+  if (pending.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  wrap.innerHTML = `
+    <div class="needs-review-hdr">
+      <span class="needs-review-hdr-title">⚠️ Variable bills — update with actual amounts</span>
+      <span class="needs-review-count">${pending.length} pending</span>
+    </div>
+    ${pending.map(({ bill, occ }) => {
+      const [yr, mn] = occ.monthKey.split('-').map(Number);
+      const monthLabel = new Date(yr, mn - 1, 1).toLocaleDateString('en-CA', { month: 'short', year: 'numeric' });
+      return `
+        <div class="nr-item" onclick="openConfirmModal('${bill.id}','${occ.monthKey}')">
+          <div class="nr-item-name">${bill.name}</div>
+          <div class="nr-item-right">
+            <span class="nr-item-amt">~${fmt(occ.amount)}</span>
+            <span class="nr-item-month">${monthLabel}</span>
+          </div>
+          <button class="nr-update-btn" onclick="event.stopPropagation();openConfirmModal('${bill.id}','${occ.monthKey}')">Update</button>
+        </div>`;
+    }).join('')}
+  `;
+}
+
+// ===== CONFIRM VARIABLE MODAL =====
+let confirmVarState = { itemId: null, monthKey: null };
+
+function openConfirmModal(itemId, monthKey) {
+  const item = data.bills.find(b => b.id === itemId);
+  if (!item) return;
+  confirmVarState = { itemId, monthKey };
+  const ov = (item.overrides || {})[monthKey];
+  const [yr, mn] = monthKey.split('-').map(Number);
+  const monthLabel = new Date(yr, mn - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+  document.getElementById('cv-title').textContent = item.name;
+  document.getElementById('cv-sub').textContent = `${monthLabel} · Average: ${fmt(item.amount)}`;
+  document.getElementById('cv-amount').value = ov ? ov.amount : item.amount;
+  document.getElementById('cv-day').value = ov ? (ov.dayOfMonth || item.dayOfMonth || 1) : (item.dayOfMonth || 1);
+  document.getElementById('cv-reset-btn').style.display = (ov && ov.confirmed) ? '' : 'none';
+  document.getElementById('confirm-var-overlay').classList.add('open');
+}
+
+function saveConfirmedVar() {
+  const { itemId, monthKey } = confirmVarState;
+  const item = data.bills.find(b => b.id === itemId);
+  if (!item) return;
+  if (!item.overrides) item.overrides = {};
+  const amount = parseFloat(document.getElementById('cv-amount').value) || item.amount;
+  const dayOfMonth = parseInt(document.getElementById('cv-day').value) || item.dayOfMonth;
+  item.overrides[monthKey] = { amount, dayOfMonth, confirmed: true };
+  saveData();
+  closeModal('confirm-var-overlay');
+  renderHome();
+  showToast('Updated ✓');
+}
+
+function resetConfirmedVar() {
+  const { itemId, monthKey } = confirmVarState;
+  const item = data.bills.find(b => b.id === itemId);
+  if (!item || !item.overrides) return;
+  delete item.overrides[monthKey];
+  saveData();
+  closeModal('confirm-var-overlay');
+  renderHome();
+  showToast('Reset to average');
 }
 
 // ===== RENDER BUDGET =====
@@ -1372,6 +1525,14 @@ function editItem(type, id) {
         <span>Active</span>
         <label class="toggle"><input type="checkbox" id="ei-active" ${item.active?'checked':''}><span class="slider"></span></label>
       </div>
+      ${type === 'bill' ? `
+      <div class="toggle-row">
+        <div>
+          <div style="font-size:14px;font-weight:500">Variable expense</div>
+          <div style="font-size:12px;color:var(--muted)">Amount changes monthly — stored value is the average</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="ei-variable" ${item.type==='variable'?'checked':''}><span class="slider"></span></label>
+      </div>` : ''}
     </div>
   `;
   document.getElementById('edit-item-overlay').classList.add('open');
@@ -1385,7 +1546,11 @@ function saveItem() {
   item.amount = parseFloat(document.getElementById('ei-amount').value) || item.amount;
   item.account = document.getElementById('ei-account').value;
   item.recurrence = document.getElementById('ei-recurrence').value;
-  if (editItemType === 'bill') item.category = document.getElementById('ei-category').value;
+  if (editItemType === 'bill') {
+    item.category = document.getElementById('ei-category').value;
+    item.type = document.getElementById('ei-variable')?.checked ? 'variable' : 'fixed';
+    if (!item.overrides) item.overrides = {};
+  }
   const dom = parseInt(document.getElementById('ei-dayofmonth').value);
   if (!isNaN(dom)) item.dayOfMonth = dom;
   const sd = document.getElementById('ei-startdate').value;
@@ -1413,7 +1578,7 @@ function openWizard() {
     step: 1, type: null, name: '', amount: 0,
     account: data.accounts[0]?.id, recurrence: 'monthly',
     dayOfMonth: 1, daysOfMonth: [1, 15],
-    startDate: isoDate(today()), category: 'other', active: true
+    startDate: isoDate(today()), category: 'other', active: true, isVariable: false
   };
   renderWizardStep();
   document.getElementById('wizard-overlay').classList.add('open');
@@ -1459,7 +1624,15 @@ function renderWizardStep() {
           ${data.accounts.map(a => `<option value="${a.id}" ${wizardState.account===a.id?'selected':''}>${a.name}</option>`).join('')}
         </select>
       </div>
-      ${wizardState.type==='expense' ? `<div class="form-group"><label>Category</label><select onchange="wizardState.category=this.value">${catOpts}</select></div>` : ''}
+      ${wizardState.type==='expense' ? `
+      <div class="form-group"><label>Category</label><select onchange="wizardState.category=this.value">${catOpts}</select></div>
+      <div class="toggle-row">
+        <div>
+          <div style="font-size:14px;font-weight:500">Variable amount</div>
+          <div style="font-size:12px;color:var(--muted)">Changes each month — stored as average</div>
+        </div>
+        <label class="toggle"><input type="checkbox" ${wizardState.isVariable?'checked':''} onchange="wizardState.isVariable=this.checked"><span class="slider"></span></label>
+      </div>` : ''}
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="wizardBack()">Back</button>
         <button class="btn btn-primary" onclick="wizardNext()">Next</button>
@@ -1547,6 +1720,8 @@ function wizardSave() {
     data.income.push(newItem);
   } else {
     newItem.category = wizardState.category;
+    newItem.type = wizardState.isVariable ? 'variable' : 'fixed';
+    newItem.overrides = {};
     data.bills.push(newItem);
   }
   saveData();
