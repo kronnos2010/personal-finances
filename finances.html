@@ -619,26 +619,31 @@ function requestDriveToken(silent) {
 }
 
 // ===== SYNC — DRIVE FILE OPS =====
-async function driveGetFileId() {
+// createIfMissing=false during loads so a failed search never creates a duplicate empty file
+async function driveGetFileId(createIfMissing = true) {
   if (sync.driveFileId) return sync.driveFileId;
   const token = sync.accessToken;
-  // Search appDataFolder for existing file
+  // Search appDataFolder — order by most-recently modified so stale duplicates are skipped
   const res = await fetch(
-    "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'finances-data.json'&fields=files(id)",
+    "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'finances-data.json'&fields=files(id,modifiedTime)&orderBy=modifiedTime%20desc",
     { headers: { Authorization: `Bearer ${token}` } }
   );
+  if (!res.ok) throw new Error('Drive list failed: ' + res.status);
   const json = await res.json();
+  if (json.error) throw new Error('Drive API: ' + json.error.message);
   if (json.files && json.files.length > 0) {
     sync.driveFileId = json.files[0].id;
     localStorage.setItem('drive_file_id', sync.driveFileId);
     return sync.driveFileId;
   }
-  // Create new file
+  if (!createIfMissing) return null;
+  // Genuine first-time: create the file
   const create = await fetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: 'finances-data.json', parents: ['appDataFolder'] }),
   });
+  if (!create.ok) throw new Error('Drive create failed: ' + create.status);
   const file = await create.json();
   sync.driveFileId = file.id;
   localStorage.setItem('drive_file_id', sync.driveFileId);
@@ -649,7 +654,8 @@ async function driveLoad() {
   try {
     const ok = await requestDriveToken(true);
     if (!ok) return null;
-    const fileId = await driveGetFileId();
+    const fileId = await driveGetFileId(false); // never create a file just to load
+    if (!fileId) return null;
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
       { headers: { Authorization: `Bearer ${sync.accessToken}` } }
@@ -951,18 +957,20 @@ async function connectDrive() {
   // Try to load existing data from Drive
   const remote = await driveLoad();
   if (remote) {
-    if (remote.lastModified > (data ? data.lastModified || 0 : 0)) {
+    const localModified = data ? (data.lastModified || 0) : 0;
+    // Always prefer Drive when local has no real data (e.g. after clearing browser cache)
+    if (localModified === 0 || remote.lastModified >= localModified) {
       data = remote;
       localStorage.setItem('pf_data_v2', JSON.stringify(data));
       renderCurrentPage();
       showToast('Loaded data from Drive ✓');
     } else {
-      // Push local data to Drive
+      // Local is genuinely newer — push to Drive
       await driveSave(data);
       showToast('Google Drive connected ✓');
     }
   } else {
-    // First time: push current data to Drive
+    // Drive has no file yet — push local data (true first-time setup)
     data.lastModified = Date.now();
     await driveSave(data);
     showToast('Google Drive connected ✓');
