@@ -900,7 +900,7 @@ function renderSyncModal() {
       <div class="card" style="margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <span style="font-size:24px">📁</span>
-          <div><div style="font-weight:600">Local File</div><div style="font-size:12px;color:var(--muted)">${fname}</div></div>
+          <div><div style="font-weight:600">Local File</div><div style="font-size:12px;color:var(--muted)">${escapeHtml(fname)}</div></div>
         </div>
         <div style="font-size:12px;color:var(--muted)">Place this file in your Google Drive folder so it syncs automatically to all devices.</div>
       </div>
@@ -1196,6 +1196,11 @@ function getEvents(from, to) {
 function fmt(n) {
   return '$' + Math.abs(n).toLocaleString('en-CA', {minimumFractionDigits:2,maximumFractionDigits:2});
 }
+// Escapes user-controlled strings (names, categories, filenames) before they're placed into innerHTML —
+// names/etc. can come from an imported JSON file, not just from typing in this app's own inputs.
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
 function getAccount(id) {
   return data.accounts.find(a => a.id === id) || { name: id };
 }
@@ -1241,7 +1246,7 @@ function renderHome() {
 
   document.getElementById('accounts-list').innerHTML = data.accounts.map(a => `
     <div class="account-card" onclick="editAccount('${a.id}')">
-      <div class="acc-name">${a.name}</div>
+      <div class="acc-name">${escapeHtml(a.name)}</div>
       <div class="acc-balance">${fmt(a.balance)}</div>
       <div class="acc-projected" style="color:${projMap[a.id] >= a.balance ? 'var(--income)' : 'var(--expense)'}">
         30d: ${fmt(projMap[a.id])}
@@ -1283,8 +1288,8 @@ function renderHome() {
       <div class="tl-item${rowCls}" ${click}>
         <div class="tl-dot ${dotCls}"></div>
         <div class="tl-info">
-          <div class="tl-name">${ev.item.name}</div>
-          <div class="tl-acct">${getAccount(ev.item.account).name}${est ? ' <span class="est-label">· est.</span>' : ''}</div>
+          <div class="tl-name">${escapeHtml(ev.item.name)}</div>
+          <div class="tl-acct">${escapeHtml(getAccount(ev.item.account).name)}${est ? ' <span class="est-label">· est.</span>' : ''}</div>
         </div>
         <div>
           <div class="tl-amount ${amtCls}">${prefix}${fmt(ev.amount)}</div>
@@ -1328,7 +1333,7 @@ function renderNeedsReview() {
       const monthLabel = new Date(yr, mn - 1, 1).toLocaleDateString('en-CA', { month: 'short', year: 'numeric' });
       return `
         <div class="nr-item" onclick="openConfirmModal('bill','${bill.id}','${occ.monthKey}')">
-          <div class="nr-item-name">${bill.name}</div>
+          <div class="nr-item-name">${escapeHtml(bill.name)}</div>
           <div class="nr-item-right">
             <span class="nr-item-amt">~${fmt(occ.amount)}</span>
             <span class="nr-item-month">${monthLabel}</span>
@@ -1365,7 +1370,10 @@ function saveConfirmedVar() {
   const item = itemList(kind).find(b => b.id === itemId);
   if (!item) return;
   if (!item.overrides) item.overrides = {};
-  const amount = parseFloat(document.getElementById('cv-amount').value) || item.amount;
+  // isNaN check (not `|| item.amount`) — a falsy-OR fallback would silently discard a legitimate 0 entry
+  // (e.g. a bill waived for a month, or a week with no paycheck) and keep the old amount instead.
+  const parsedAmount = parseFloat(document.getElementById('cv-amount').value);
+  const amount = isNaN(parsedAmount) ? item.amount : parsedAmount;
   const dayOfMonth = parseInt(document.getElementById('cv-day').value) || item.dayOfMonth;
   item.overrides[monthKey] = { amount, dayOfMonth, confirmed: true };
   saveData();
@@ -1384,7 +1392,7 @@ function resetConfirmedVar() {
   closeModal('confirm-var-overlay');
   renderHome();
   refreshExpenseHistoryIfOpen();
-  showToast('Reset to average');
+  showToast(item.type === 'variable' ? 'Reset to average' : 'Reset to default');
 }
 
 // ===== PAYMENT HISTORY (calendar year) — shared by bills and income =====
@@ -1432,7 +1440,7 @@ function renderExpenseHistory() {
     ? '<div class="empty"><div class="em-icon">📭</div><p>No payments this year</p></div>'
     : `<div class="budget-list" style="padding:0">${occs.map(occ => `
         <div class="budget-item ${occ.estimated ? 'estimated-row' : 'clickable'}" onclick="openConfirmModal('${kind}','${item.id}','${occ.monthKey}')">
-          <div class="bi-icon ${isIncome ? 'cat-income' : 'cat-' + (item.category || 'other')}">${isIncome ? '💰' : (CAT_ICON[item.category] || '📦')}</div>
+          <div class="bi-icon ${isIncome ? 'cat-income' : 'cat-' + escapeHtml(item.category || 'other')}">${isIncome ? '💰' : (CAT_ICON[item.category] || '📦')}</div>
           <div class="bi-info">
             <div class="bi-name">${fmtDate(occ.date)}</div>
             <div class="bi-sub">${rowLabel(occ)}</div>
@@ -1444,7 +1452,7 @@ function renderExpenseHistory() {
   body.innerHTML = `
     <div class="month-nav" style="padding:0 0 8px">
       <button onclick="changeHistYear(-1)">&#8249;</button>
-      <h2 style="font-size:17px">${item.name} · ${year}</h2>
+      <h2 style="font-size:17px">${escapeHtml(item.name)} · ${year}</h2>
       <button onclick="changeHistYear(1)">&#8250;</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">
@@ -1470,7 +1478,7 @@ function renderExpenses() {
   const billRow = item => `
     <div class="settings-row" onclick="openExpenseHistory('bill','${item.id}')">
       <div class="sr-left">
-        <div class="sr-title">${item.name}${item.type === 'variable' ? ' <span style="font-size:10px;color:var(--warn);font-weight:600;vertical-align:middle">VAR</span>' : ''}</div>
+        <div class="sr-title">${escapeHtml(item.name)}${item.type === 'variable' ? ' <span style="font-size:10px;color:var(--warn);font-weight:600;vertical-align:middle">VAR</span>' : ''}</div>
         <div class="sr-sub">${item.type === 'variable' ? '~' : ''}${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
       </div>
       <div class="sr-right" style="color:${item.active ? 'var(--expense)' : 'var(--muted)'}">
@@ -1507,8 +1515,8 @@ function renderIncome() {
       ${data.income.map(item => `
         <div class="settings-row" onclick="openExpenseHistory('income','${item.id}')">
           <div class="sr-left">
-            <div class="sr-title">${item.name}</div>
-            <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)} · ${getAccount(item.account).name}</div>
+            <div class="sr-title">${escapeHtml(item.name)}</div>
+            <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)} · ${escapeHtml(getAccount(item.account).name)}</div>
           </div>
           <div class="sr-right" style="color:${item.active ? 'var(--income)' : 'var(--muted)'}">
             <button class="sr-history-btn" title="Edit" onclick="event.stopPropagation();editItem('income','${item.id}')">✏️</button>
@@ -1525,7 +1533,7 @@ function renderSettings() {
   document.getElementById('settings-accounts').innerHTML = data.accounts.map(a => `
     <div class="settings-row" onclick="editAccount('${a.id}')">
       <div class="sr-left">
-        <div class="sr-title">${a.name}</div>
+        <div class="sr-title">${escapeHtml(a.name)}</div>
         <div class="sr-sub">Balance: ${fmt(a.balance)}</div>
       </div>
       <div class="sr-right">${fmt(a.balance)} ›</div>
@@ -1559,7 +1567,7 @@ function recurrenceLabel(item) {
     case 'monthly': return `Monthly (${ordinal(item.dayOfMonth)})`;
     case 'twicemonthly': return `Twice/month (${(item.daysOfMonth||[]).map(ordinal).join(' & ')})`;
     case 'once': return 'One time';
-    default: return item.recurrence;
+    default: return escapeHtml(item.recurrence);
   }
 }
 
@@ -1619,10 +1627,10 @@ function editItem(type, id) {
     ).join('') : '';
   document.getElementById('edit-item-body').innerHTML = `
     <div class="edit-fields">
-      <div class="form-group"><label>Name</label><input id="ei-name" type="text" value="${item.name}"></div>
-      <div class="form-group"><label>Amount (CAD)</label><input id="ei-amount" type="number" inputmode="decimal" step="0.01" value="${item.amount}"></div>
+      <div class="form-group"><label>Name</label><input id="ei-name" type="text" value="${escapeHtml(item.name)}"></div>
+      <div class="form-group"><label>Amount (CAD)</label><input id="ei-amount" type="number" inputmode="decimal" step="0.01" value="${escapeHtml(item.amount)}"></div>
       <div class="form-group"><label>Account</label><select id="ei-account">
-        ${data.accounts.map(a => `<option value="${a.id}" ${item.account===a.id?'selected':''}>${a.name}</option>`).join('')}
+        ${data.accounts.map(a => `<option value="${escapeHtml(a.id)}" ${item.account===a.id?'selected':''}>${escapeHtml(a.name)}</option>`).join('')}
       </select></div>
       ${type === 'bill' ? `<div class="form-group"><label>Category</label><select id="ei-category">${catOpts}</select></div>` : ''}
       <div class="form-group"><label>Recurrence</label><select id="ei-recurrence">
@@ -1636,7 +1644,7 @@ function editItem(type, id) {
         <label>Day of Month</label><select id="ei-dayofmonth">${dayOptionsHTML(item.dayOfMonth||item.daysOfMonth?.[0]||1)}</select>
       </div>
       <div class="form-group">
-        <label>Start Date</label><input id="ei-startdate" type="date" value="${item.startDate||''}">
+        <label>Start Date</label><input id="ei-startdate" type="date" value="${escapeHtml(item.startDate||'')}">
       </div>
       <div class="toggle-row">
         <span>Active</span>
@@ -1660,7 +1668,8 @@ function saveItem() {
   const item = list.find(i => i.id === editItemId);
   if (!item) return;
   item.name = document.getElementById('ei-name').value.trim() || item.name;
-  item.amount = parseFloat(document.getElementById('ei-amount').value) || item.amount;
+  const parsedAmount = parseFloat(document.getElementById('ei-amount').value);
+  item.amount = isNaN(parsedAmount) ? item.amount : parsedAmount;
   item.account = document.getElementById('ei-account').value;
   item.recurrence = document.getElementById('ei-recurrence').value;
   if (editItemType === 'bill') {
@@ -1680,7 +1689,9 @@ function saveItem() {
 }
 
 function deleteItem() {
-  if (!confirm(`Delete "${editItemId}"?`)) return;
+  const list = editItemType === 'income' ? data.income : data.bills;
+  const item = list.find(i => i.id === editItemId);
+  if (!confirm(`Delete "${item ? item.name : editItemId}"?`)) return;
   if (editItemType === 'income') data.income = data.income.filter(i => i.id !== editItemId);
   else data.bills = data.bills.filter(i => i.id !== editItemId);
   saveData();
@@ -1716,14 +1727,14 @@ function renderWizardStep() {
       ).join('') : '';
     body.innerHTML = `
       <div class="form-group"><label>Name</label>
-        <input id="w-name" type="text" placeholder="e.g. Netflix" value="${wizardState.name}" oninput="wizardState.name=this.value">
+        <input id="w-name" type="text" placeholder="e.g. Netflix" value="${escapeHtml(wizardState.name)}" oninput="wizardState.name=this.value">
       </div>
       <div class="form-group"><label>Amount (CAD)</label>
         <input id="w-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${wizardState.amount||''}" oninput="wizardState.amount=parseFloat(this.value)||0">
       </div>
       <div class="form-group"><label>Account</label>
         <select onchange="wizardState.account=this.value">
-          ${data.accounts.map(a => `<option value="${a.id}" ${wizardState.account===a.id?'selected':''}>${a.name}</option>`).join('')}
+          ${data.accounts.map(a => `<option value="${escapeHtml(a.id)}" ${wizardState.account===a.id?'selected':''}>${escapeHtml(a.name)}</option>`).join('')}
         </select>
       </div>
       ${wizardState.type==='expense' ? `
@@ -1760,15 +1771,15 @@ function renderWizardStep() {
     body.innerHTML = `
       <div class="card" style="margin-bottom:20px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div style="font-size:18px;font-weight:700">${wizardState.name || '(unnamed)'}</div>
+          <div style="font-size:18px;font-weight:700">${escapeHtml(wizardState.name) || '(unnamed)'}</div>
           <div style="font-size:20px;font-weight:700;color:${wizardState.type==='income'?'var(--income)':'var(--expense)'}">
             ${wizardState.type==='income'?'+':'-'}${fmt(wizardState.amount)}
           </div>
         </div>
         <div style="color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:6px">
-          <div>Account: ${getAccount(wizardState.account).name}</div>
+          <div>Account: ${escapeHtml(getAccount(wizardState.account).name)}</div>
           <div>Schedule: ${recurrenceLabel(wizardState)}</div>
-          ${wizardState.type==='expense'?`<div>Category: ${wizardState.category}</div>`:''}
+          ${wizardState.type==='expense'?`<div>Category: ${escapeHtml(wizardState.category)}</div>`:''}
         </div>
       </div>
       <div class="btn-row">
@@ -1785,7 +1796,7 @@ function renderWizardScheduleFields() {
   const r = wizardState.recurrence;
   if (r === 'weekly' || r === 'biweekly' || r === 'once') {
     c.innerHTML = `<div class="form-group"><label>Start Date</label>
-      <input type="date" value="${wizardState.startDate}" onchange="wizardState.startDate=this.value">
+      <input type="date" value="${escapeHtml(wizardState.startDate)}" onchange="wizardState.startDate=this.value">
     </div>`;
   } else if (r === 'monthly') {
     c.innerHTML = `<div class="form-group"><label>Day of Month</label>
@@ -1849,6 +1860,14 @@ function exportData() {
   showToast('Exported!');
 }
 
+// Ids get interpolated into inline onclick(...) JS-string-literal arguments all over this app
+// (e.g. onclick="editItem('bill','${item.id}')") — HTML-escaping alone can't make that safe, since
+// the browser HTML-decodes the attribute value BEFORE the result is parsed as JS. So instead of
+// escaping ids, imports with any id outside a safe charset are rejected outright.
+function isSafeId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]+$/.test(id);
+}
+
 function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1856,7 +1875,13 @@ function importData(event) {
   reader.onload = e => {
     try {
       const imported = JSON.parse(e.target.result);
-      if (!imported.accounts || !imported.bills) throw new Error('Invalid');
+      if (!Array.isArray(imported.accounts) || !Array.isArray(imported.bills)) throw new Error('Invalid structure');
+      const income = Array.isArray(imported.income) ? imported.income : [];
+      const allItems = [...imported.accounts, ...income, ...imported.bills];
+      if (allItems.some(i => !i || typeof i !== 'object' || !isSafeId(i.id))) {
+        throw new Error('Unsafe or missing id');
+      }
+      imported.income = income;
       data = imported;
       saveData();
       renderHome(); renderExpenses(); renderIncome(); renderSettings();
