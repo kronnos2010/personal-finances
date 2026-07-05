@@ -139,6 +139,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .tl-item.estimated-row{cursor:pointer}
 .tl-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:10px 4px}
 .est-label{font-size:10px;color:var(--warn);font-weight:600;letter-spacing:.3px}
+.budget-item.estimated-row{cursor:pointer}
+.budget-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:12px 4px}
+.budget-item.clickable{cursor:pointer}
+.budget-item.clickable:hover{background:var(--surface2);border-radius:8px;margin:0 -4px;padding:12px 4px}
+.sr-history-btn{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px;border-radius:6px}
+.sr-history-btn:hover{background:var(--surface2)}
 /* Needs review */
 .needs-review-wrap{margin:0 20px 8px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);overflow:hidden}
 .needs-review-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(245,158,11,.2)}
@@ -536,6 +542,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <div class="btn-row">
       <button class="btn btn-secondary" onclick="closeModal('confirm-var-overlay')">Cancel</button>
       <button class="btn btn-primary" onclick="saveConfirmedVar()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPENSE HISTORY MODAL -->
+<div class="modal-overlay" id="expense-history-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="expense-history-body"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('expense-history-overlay')">Close</button>
     </div>
   </div>
 </div>
@@ -1358,6 +1375,7 @@ function saveConfirmedVar() {
   saveData();
   closeModal('confirm-var-overlay');
   renderHome();
+  refreshExpenseHistoryIfOpen();
   showToast('Updated ✓');
 }
 
@@ -1369,7 +1387,70 @@ function resetConfirmedVar() {
   saveData();
   closeModal('confirm-var-overlay');
   renderHome();
+  refreshExpenseHistoryIfOpen();
   showToast('Reset to average');
+}
+
+// ===== EXPENSE PAYMENT HISTORY (calendar year) =====
+let expHistState = { itemId: null, year: null };
+
+function openExpenseHistory(itemId) {
+  const item = data.bills.find(b => b.id === itemId);
+  if (!item) return;
+  expHistState = { itemId, year: today().getFullYear() };
+  renderExpenseHistory();
+  document.getElementById('expense-history-overlay').classList.add('open');
+}
+
+function changeHistYear(dir) {
+  expHistState.year += dir;
+  renderExpenseHistory();
+}
+
+function refreshExpenseHistoryIfOpen() {
+  const ov = document.getElementById('expense-history-overlay');
+  if (ov && ov.classList.contains('open')) renderExpenseHistory();
+}
+
+function renderExpenseHistory() {
+  const item = data.bills.find(b => b.id === expHistState.itemId);
+  const body = document.getElementById('expense-history-body');
+  if (!item || !body) return;
+  const year = expHistState.year;
+  const from = new Date(year, 0, 1), to = new Date(year, 11, 31);
+  const occs = getOccurrences(item, from, to);
+  const total = occs.reduce((s, o) => s + o.amount, 0);
+  const avg = total / 12;
+  const isVar = item.type === 'variable';
+
+  const rowsHTML = occs.length === 0
+    ? '<div class="empty"><div class="em-icon">📭</div><p>No payments this year</p></div>'
+    : `<div class="budget-list" style="padding:0">${occs.map(occ => `
+        <div class="budget-item${isVar ? ' estimated-row' : ''}" ${isVar ? `onclick="openConfirmModal('${item.id}','${occ.monthKey}')"` : ''}>
+          <div class="bi-icon cat-${item.category || 'other'}">${CAT_ICON[item.category] || '📦'}</div>
+          <div class="bi-info">
+            <div class="bi-name">${fmtDate(occ.date)}</div>
+            <div class="bi-sub">${occ.estimated ? 'Estimated — tap to confirm' : (isVar ? 'Confirmed — tap to adjust' : 'Fixed')}</div>
+          </div>
+          <div class="bi-amt" style="color:${occ.estimated ? 'var(--warn)' : 'var(--expense)'}">${occ.estimated ? '~' : ''}${fmt(occ.amount)}</div>
+        </div>
+      `).join('')}</div>`;
+
+  body.innerHTML = `
+    <div class="month-nav" style="padding:0 0 8px">
+      <button onclick="changeHistYear(-1)">&#8249;</button>
+      <h2 style="font-size:17px">${item.name} · ${year}</h2>
+      <button onclick="changeHistYear(1)">&#8250;</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">
+      ${occs.length} payment${occs.length === 1 ? '' : 's'} this year${isVar ? ' · tap a row to confirm the actual amount' : ''}
+    </div>
+    ${rowsHTML}
+    <div class="summary-row" style="padding:16px 0 0">
+      <div class="summary-card"><div class="s-label">Total</div><div class="s-amount expense">${fmt(total)}</div></div>
+      <div class="summary-card"><div class="s-label">Monthly Avg</div><div class="s-amount expense">${fmt(avg)}</div></div>
+    </div>
+  `;
 }
 
 // ===== RENDER BUDGET =====
@@ -1400,8 +1481,9 @@ function renderBudget() {
     ? '<div class="empty"><div class="em-icon">📭</div><p>No entries this month</p></div>'
     : filtered.map(ev => {
         const cat = ev.item.category || (ev.type === 'income' ? 'income' : 'other');
+        const clickable = ev.type === 'expense';
         return `
-          <div class="budget-item">
+          <div class="budget-item${clickable ? ' clickable' : ''}" ${clickable ? `onclick="openExpenseHistory('${ev.item.id}')"` : ''}>
             <div class="bi-icon cat-${cat}">${CAT_ICON[cat] || '📦'}</div>
             <div class="bi-info">
               <div class="bi-name">${ev.item.name}</div>
@@ -1459,6 +1541,7 @@ function renderSettings() {
         <div class="sr-sub">${item.type === 'variable' ? '~' : ''}${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
       </div>
       <div class="sr-right" style="color:${item.active ? 'var(--expense)' : 'var(--muted)'}">
+        <button class="sr-history-btn" title="Payment history" onclick="event.stopPropagation();openExpenseHistory('${item.id}')">📅</button>
         ${item.active ? '●' : '○'} ›
       </div>
     </div>`;
