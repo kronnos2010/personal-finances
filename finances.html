@@ -1083,6 +1083,15 @@ function isoDate(d) {
 function lastDayOfMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
+// Override keys are 'YYYY-MM' for monthly/once items (1 occurrence per key) or the full
+// 'YYYY-MM-DD' date for weekly/biweekly/twicemonthly items (several occurrences per month).
+function occKeyLabel(key) {
+  const parts = key.split('-').map(Number);
+  if (parts.length === 3) {
+    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+  return new Date(parts[0], parts[1] - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+}
 
 // ===== RECURRENCE ENGINE =====
 // Returns [{date, amount, estimated, overridden, monthKey}]
@@ -1110,11 +1119,13 @@ function getOccurrences(item, fromDate, toDate) {
   switch (item.recurrence) {
     case 'weekly':
     case 'biweekly': {
+      // Keyed by exact date (not month) — a month can hold several weekly/biweekly occurrences
+      // and each must be independently overridable (e.g. one week's paycheck differs from the rest).
       const interval = item.recurrence === 'weekly' ? 7 : 14;
       let d = parseDate(item.startDate);
       while (d < from) d.setDate(d.getDate() + interval);
       while (d <= to) {
-        results.push(mkOcc(d, isoDate(d).substring(0, 7)));
+        results.push(mkOcc(d, isoDate(d)));
         d.setDate(d.getDate() + interval);
       }
       break;
@@ -1143,16 +1154,16 @@ function getOccurrences(item, fromDate, toDate) {
       break;
     }
     case 'twicemonthly': {
+      // Keyed by exact date (not month) — a month has two occurrences that must be independently overridable.
       const days = item.daysOfMonth || [1, 15];
       let y = from.getFullYear(), m = from.getMonth();
       if (m === 0) { y--; m = 11; } else m--;
       for (let i = 0; i < 24; i++) {
-        const mk = `${y}-${String(m+1).padStart(2,'0')}`;
         for (const dom of days) {
           const actualDay = Math.min(dom, lastDayOfMonth(y, m));
           const d = new Date(y, m, actualDay);
           if (d > to) break;
-          if (d >= from) results.push(mkOcc(d, mk));
+          if (d >= from) results.push(mkOcc(d, isoDate(d)));
         }
         m++; if (m > 11) { m = 0; y++; }
       }
@@ -1267,7 +1278,7 @@ function renderHome() {
       const amtCls = est ? 'estimated' : ev.type;
       const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
       const rowCls = est ? ' estimated-row' : '';
-      const click = est ? `onclick="openConfirmModal('${ev.item.id}','${ev.monthKey}')"` : '';
+      const click = est ? `onclick="openConfirmModal('${ev.type === 'income' ? 'income' : 'bill'}','${ev.item.id}','${ev.monthKey}')"` : '';
       return `
       <div class="tl-item${rowCls}" ${click}>
         <div class="tl-dot ${dotCls}"></div>
@@ -1316,28 +1327,29 @@ function renderNeedsReview() {
       const [yr, mn] = occ.monthKey.split('-').map(Number);
       const monthLabel = new Date(yr, mn - 1, 1).toLocaleDateString('en-CA', { month: 'short', year: 'numeric' });
       return `
-        <div class="nr-item" onclick="openConfirmModal('${bill.id}','${occ.monthKey}')">
+        <div class="nr-item" onclick="openConfirmModal('bill','${bill.id}','${occ.monthKey}')">
           <div class="nr-item-name">${bill.name}</div>
           <div class="nr-item-right">
             <span class="nr-item-amt">~${fmt(occ.amount)}</span>
             <span class="nr-item-month">${monthLabel}</span>
           </div>
-          <button class="nr-update-btn" onclick="event.stopPropagation();openConfirmModal('${bill.id}','${occ.monthKey}')">Update</button>
+          <button class="nr-update-btn" onclick="event.stopPropagation();openConfirmModal('bill','${bill.id}','${occ.monthKey}')">Update</button>
         </div>`;
     }).join('')}
   `;
 }
 
-// ===== CONFIRM VARIABLE MODAL =====
-let confirmVarState = { itemId: null, monthKey: null };
+// ===== CONFIRM VARIABLE / ADJUST MODAL — shared by bills and income =====
+function itemList(kind) { return kind === 'income' ? data.income : data.bills; }
 
-function openConfirmModal(itemId, monthKey) {
-  const item = data.bills.find(b => b.id === itemId);
+let confirmVarState = { kind: null, itemId: null, monthKey: null };
+
+function openConfirmModal(kind, itemId, monthKey) {
+  const item = itemList(kind).find(b => b.id === itemId);
   if (!item) return;
-  confirmVarState = { itemId, monthKey };
+  confirmVarState = { kind, itemId, monthKey };
   const ov = (item.overrides || {})[monthKey];
-  const [yr, mn] = monthKey.split('-').map(Number);
-  const monthLabel = new Date(yr, mn - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+  const monthLabel = occKeyLabel(monthKey);
   const isVar = item.type === 'variable';
   const currentDay = ov ? (ov.dayOfMonth || item.dayOfMonth || 1) : (item.dayOfMonth || 1);
   document.getElementById('cv-title').textContent = item.name;
@@ -1349,8 +1361,8 @@ function openConfirmModal(itemId, monthKey) {
 }
 
 function saveConfirmedVar() {
-  const { itemId, monthKey } = confirmVarState;
-  const item = data.bills.find(b => b.id === itemId);
+  const { kind, itemId, monthKey } = confirmVarState;
+  const item = itemList(kind).find(b => b.id === itemId);
   if (!item) return;
   if (!item.overrides) item.overrides = {};
   const amount = parseFloat(document.getElementById('cv-amount').value) || item.amount;
@@ -1364,8 +1376,8 @@ function saveConfirmedVar() {
 }
 
 function resetConfirmedVar() {
-  const { itemId, monthKey } = confirmVarState;
-  const item = data.bills.find(b => b.id === itemId);
+  const { kind, itemId, monthKey } = confirmVarState;
+  const item = itemList(kind).find(b => b.id === itemId);
   if (!item || !item.overrides) return;
   delete item.overrides[monthKey];
   saveData();
@@ -1375,13 +1387,13 @@ function resetConfirmedVar() {
   showToast('Reset to average');
 }
 
-// ===== EXPENSE PAYMENT HISTORY (calendar year) =====
-let expHistState = { itemId: null, year: null };
+// ===== PAYMENT HISTORY (calendar year) — shared by bills and income =====
+let expHistState = { kind: null, itemId: null, year: null };
 
-function openExpenseHistory(itemId) {
-  const item = data.bills.find(b => b.id === itemId);
+function openExpenseHistory(kind, itemId) {
+  const item = itemList(kind).find(b => b.id === itemId);
   if (!item) return;
-  expHistState = { itemId, year: today().getFullYear() };
+  expHistState = { kind, itemId, year: today().getFullYear() };
   renderExpenseHistory();
   document.getElementById('expense-history-overlay').classList.add('open');
 }
@@ -1397,10 +1409,12 @@ function refreshExpenseHistoryIfOpen() {
 }
 
 function renderExpenseHistory() {
-  const item = data.bills.find(b => b.id === expHistState.itemId);
+  const { kind, itemId, year } = expHistState;
+  const item = itemList(kind).find(b => b.id === itemId);
   const body = document.getElementById('expense-history-body');
   if (!item || !body) return;
-  const year = expHistState.year;
+  const isIncome = kind === 'income';
+  const amtClass = isIncome ? 'income' : 'expense';
   const from = new Date(year, 0, 1), to = new Date(year, 11, 31);
   const occs = getOccurrences(item, from, to);
   const total = occs.reduce((s, o) => s + o.amount, 0);
@@ -1411,17 +1425,19 @@ function renderExpenseHistory() {
     : isVar ? 'Confirmed — tap to adjust'
     : occ.overridden ? 'Adjusted — tap to change'
     : 'Tap to adjust this payment';
+  const rowColor = occ => occ.estimated ? 'var(--warn)' : `var(--${amtClass})`;
+  const rowPrefix = occ => isIncome ? '+' : (occ.estimated ? '~' : '');
 
   const rowsHTML = occs.length === 0
     ? '<div class="empty"><div class="em-icon">📭</div><p>No payments this year</p></div>'
     : `<div class="budget-list" style="padding:0">${occs.map(occ => `
-        <div class="budget-item ${occ.estimated ? 'estimated-row' : 'clickable'}" onclick="openConfirmModal('${item.id}','${occ.monthKey}')">
-          <div class="bi-icon cat-${item.category || 'other'}">${CAT_ICON[item.category] || '📦'}</div>
+        <div class="budget-item ${occ.estimated ? 'estimated-row' : 'clickable'}" onclick="openConfirmModal('${kind}','${item.id}','${occ.monthKey}')">
+          <div class="bi-icon ${isIncome ? 'cat-income' : 'cat-' + (item.category || 'other')}">${isIncome ? '💰' : (CAT_ICON[item.category] || '📦')}</div>
           <div class="bi-info">
             <div class="bi-name">${fmtDate(occ.date)}</div>
             <div class="bi-sub">${rowLabel(occ)}</div>
           </div>
-          <div class="bi-amt" style="color:${occ.estimated ? 'var(--warn)' : 'var(--expense)'}">${occ.estimated ? '~' : ''}${fmt(occ.amount)}</div>
+          <div class="bi-amt" style="color:${rowColor(occ)}">${rowPrefix(occ)}${fmt(occ.amount)}</div>
         </div>
       `).join('')}</div>`;
 
@@ -1436,8 +1452,8 @@ function renderExpenseHistory() {
     </div>
     ${rowsHTML}
     <div class="summary-row" style="padding:16px 0 0">
-      <div class="summary-card"><div class="s-label">Total</div><div class="s-amount expense">${fmt(total)}</div></div>
-      <div class="summary-card"><div class="s-label">Monthly Avg</div><div class="s-amount expense">${fmt(avg)}</div></div>
+      <div class="summary-card"><div class="s-label">Total</div><div class="s-amount ${amtClass}">${fmt(total)}</div></div>
+      <div class="summary-card"><div class="s-label">Monthly Avg</div><div class="s-amount ${amtClass}">${fmt(avg)}</div></div>
     </div>
   `;
 }
@@ -1452,7 +1468,7 @@ function renderExpenses() {
 
   const assignedCats = new Set(BILL_GROUPS.flatMap(g => g.cats));
   const billRow = item => `
-    <div class="settings-row" onclick="openExpenseHistory('${item.id}')">
+    <div class="settings-row" onclick="openExpenseHistory('bill','${item.id}')">
       <div class="sr-left">
         <div class="sr-title">${item.name}${item.type === 'variable' ? ' <span style="font-size:10px;color:var(--warn);font-weight:600;vertical-align:middle">VAR</span>' : ''}</div>
         <div class="sr-sub">${item.type === 'variable' ? '~' : ''}${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
@@ -1489,12 +1505,13 @@ function renderIncome() {
   document.getElementById('income-list').innerHTML = data.income.length ? `
     <div class="settings-section">
       ${data.income.map(item => `
-        <div class="settings-row" onclick="editItem('income','${item.id}')">
+        <div class="settings-row" onclick="openExpenseHistory('income','${item.id}')">
           <div class="sr-left">
             <div class="sr-title">${item.name}</div>
             <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)} · ${getAccount(item.account).name}</div>
           </div>
           <div class="sr-right" style="color:${item.active ? 'var(--income)' : 'var(--muted)'}">
+            <button class="sr-history-btn" title="Edit" onclick="event.stopPropagation();editItem('income','${item.id}')">✏️</button>
             ${item.active ? '●' : '○'} ›
           </div>
         </div>
