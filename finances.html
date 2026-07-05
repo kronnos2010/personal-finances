@@ -26,7 +26,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;font-weight:500;padding:8px;transition:color .15s}
 .nav-btn .icon{font-size:20px;line-height:1}
 .nav-btn.active{color:var(--accent)}
-.nav-btn.add-btn{color:var(--income)}
+.page-add-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 40px);margin:8px 20px 4px;padding:12px;border-radius:10px;border:none;background:var(--income);color:#000;font-size:14px;font-weight:700;cursor:pointer}
+.page-add-btn:hover{opacity:.9}
 .card{background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--border)}
 .section-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:16px 20px 8px}
 .accounts-scroll{display:flex;gap:12px;padding:8px 20px 4px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
@@ -63,9 +64,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .s-amount.expense{color:var(--expense)}
 .s-amount.net.pos{color:var(--income)}
 .s-amount.net.neg{color:var(--expense)}
-.tab-bar{display:flex;padding:8px 20px 0;gap:0;border-bottom:1px solid var(--border)}
-.tab{padding:8px 16px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
-.tab.active{color:var(--text);border-bottom-color:var(--accent)}
 .budget-list{padding:0 20px}
 .budget-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
 .budget-item:last-child{border-bottom:none}
@@ -99,11 +97,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .form-group input,.form-group select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:15px;outline:none;-webkit-appearance:none}
 .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
 .form-group select option{background:var(--surface);color:var(--text)}
-.type-picker{display:flex;gap:10px}
-.type-btn{flex:1;padding:16px;border-radius:var(--radius);border:2px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;text-align:center;font-size:14px;font-weight:600;transition:all .15s}
-.type-btn .tb-icon{font-size:28px;display:block;margin-bottom:8px}
-.type-btn.selected.income{border-color:var(--income);color:var(--income);background:rgba(34,197,94,.1)}
-.type-btn.selected.expense{border-color:var(--expense);color:var(--expense);background:rgba(239,68,68,.1)}
 .pills{display:flex;flex-wrap:wrap;gap:8px}
 .pill{padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
 .pill.selected{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.1)}
@@ -216,14 +209,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .sidebar-btn:hover{background:var(--surface2);color:var(--text)}
   .sidebar-btn.active{background:rgba(59,130,246,.15);color:var(--accent)}
   .sidebar-btn .snav-icon{font-size:18px;width:22px;text-align:center;flex-shrink:0}
-  .sidebar-add{padding:0 12px 12px}
-  .sidebar-add-btn{
-    display:flex;align-items:center;justify-content:center;gap:8px;
-    width:100%;padding:12px;border-radius:10px;border:none;
-    background:var(--income);color:#000;font-size:14px;font-weight:700;
-    cursor:pointer;transition:opacity .15s;
-  }
-  .sidebar-add-btn:hover{opacity:.85}
   .sidebar-footer{padding:12px;border-top:1px solid var(--border);margin-top:auto}
   .sidebar-sync-btn{
     display:flex;align-items:center;gap:8px;width:100%;
@@ -270,15 +255,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .tl-item{padding:12px 0}
   .tl-name{font-size:15px}
 
-  /* Budget */
+  /* Expenses / history lists */
   .month-nav{padding:16px 40px}
   .summary-row{padding:8px 40px}
   .summary-card .s-amount{font-size:20px}
-  .tab-bar{padding:8px 40px 0}
   .budget-list{padding:0 40px}
   .budget-item{padding:14px 0}
   .budget-item .bi-name{font-size:15px}
   .budget-item .bi-amt{font-size:16px}
+  .page-add-btn{width:calc(100% - 80px);margin:8px 40px 4px}
 
   /* Settings */
   .settings-section{margin:0 40px 20px}
@@ -334,18 +319,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     </div>
     <nav class="sidebar-nav">
       <button class="sidebar-btn active" id="snav-home" onclick="openPage('home')">
-        <span class="snav-icon">🏠</span><span>Home</span>
+        <span class="snav-icon">💵</span><span>Cash Flow</span>
       </button>
-      <button class="sidebar-btn" id="snav-budget" onclick="openPage('budget')">
-        <span class="snav-icon">📊</span><span>Budget</span>
+      <button class="sidebar-btn" id="snav-expenses" onclick="openPage('expenses')">
+        <span class="snav-icon">🧾</span><span>Expenses</span>
+      </button>
+      <button class="sidebar-btn" id="snav-income" onclick="openPage('income')">
+        <span class="snav-icon">💰</span><span>Income</span>
       </button>
       <button class="sidebar-btn" id="snav-settings" onclick="openPage('settings')">
         <span class="snav-icon">⚙️</span><span>Settings</span>
       </button>
     </nav>
-    <div class="sidebar-add">
-      <button class="sidebar-add-btn" onclick="openWizard()">＋ Add Entry</button>
-    </div>
     <div class="sidebar-footer">
       <button class="sidebar-sync-btn" id="sidebar-sync-btn" onclick="openSyncModal()">
         <span id="sidebar-sync-icon">☁️</span>
@@ -381,7 +366,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="home-panel home-panel-left">
         <div class="section-title">Accounts</div>
         <div class="accounts-scroll" id="accounts-list"></div>
-        <div id="needs-review-wrap"></div>
       </div>
       <div class="home-panel home-panel-right">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -394,29 +378,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     </div>
   </div>
 
-  <!-- BUDGET PAGE -->
-  <div id="page-budget" class="page">
-    <div class="month-nav">
-      <button onclick="changeMonth(-1)">&#8249;</button>
-      <h2 id="budget-month-label"></h2>
-      <button onclick="changeMonth(1)">&#8250;</button>
+  <!-- EXPENSES PAGE -->
+  <div id="page-expenses" class="page">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Expenses</span>
+      <span style="font-size:12px;color:var(--muted);padding-right:20px" id="expenses-month-total"></span>
     </div>
-    <div class="summary-row" id="budget-summary"></div>
-    <div class="tab-bar">
-      <div class="tab active" data-tab="all" onclick="selectBudgetTab(this,'all')">All</div>
-      <div class="tab" data-tab="income" onclick="selectBudgetTab(this,'income')">Income</div>
-      <div class="tab" data-tab="expenses" onclick="selectBudgetTab(this,'expenses')">Expenses</div>
+    <button class="page-add-btn" onclick="openWizard('expense')">＋ Add Expense</button>
+    <div id="expenses-list"></div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- INCOME PAGE -->
+  <div id="page-income" class="page">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Income</span>
+      <span style="font-size:12px;color:var(--muted);padding-right:20px" id="income-month-total"></span>
     </div>
-    <div class="budget-list" id="budget-list"></div>
+    <button class="page-add-btn" onclick="openWizard('income')">＋ Add Income Stream</button>
+    <div id="income-list"></div>
+    <div style="height:20px"></div>
   </div>
 
   <!-- SETTINGS PAGE -->
   <div id="page-settings" class="page">
     <div class="section-title">Accounts</div>
     <div class="settings-section" id="settings-accounts"></div>
-    <div class="section-title">Income Sources</div>
-    <div class="settings-section" id="settings-income"></div>
-    <div id="settings-bills"></div>
     <div class="section-title">Sync</div>
     <div class="settings-section" id="settings-sync"></div>
     <div class="section-title">Security</div>
@@ -448,14 +435,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   <!-- BOTTOM NAV -->
   <div class="bottom-nav">
     <button class="nav-btn active" id="nav-home" onclick="openPage('home')">
-      <span class="icon">🏠</span><span>Home</span>
+      <span class="icon">💵</span><span>Cash Flow</span>
     </button>
-    <button class="nav-btn" id="nav-budget" onclick="openPage('budget')">
-      <span class="icon">📊</span><span>Budget</span>
+    <button class="nav-btn" id="nav-expenses" onclick="openPage('expenses')">
+      <span class="icon">🧾</span><span>Expenses</span>
     </button>
-    <button class="nav-btn add-btn" onclick="openWizard()">
-      <span class="icon" style="font-size:26px;background:var(--income);color:#000;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:-4px auto 0">+</span>
-      <span>Add</span>
+    <button class="nav-btn" id="nav-income" onclick="openPage('income')">
+      <span class="icon">💰</span><span>Income</span>
     </button>
     <button class="nav-btn" id="nav-settings" onclick="openPage('settings')">
       <span class="icon">⚙️</span><span>Settings</span>
@@ -490,7 +476,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <h2>Edit Account</h2>
     <div class="edit-fields">
       <div class="form-group"><label>Account Name</label><input id="ea-name" type="text"></div>
-      <div class="form-group"><label>Current Balance (CAD)</label><input id="ea-balance" type="number" step="0.01"></div>
+      <div class="form-group"><label>Current Balance (CAD)</label><input id="ea-balance" type="number" inputmode="decimal" step="0.01"></div>
     </div>
     <div class="btn-row">
       <button class="btn btn-secondary" onclick="closeModal('edit-account-overlay')">Cancel</button>
@@ -520,28 +506,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <h2 id="cv-title">Update Bill</h2>
     <div id="cv-sub" style="color:var(--muted);font-size:13px;margin-bottom:20px"></div>
     <div class="edit-fields">
-      <div class="form-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Actual Day of Month</label><input id="cv-day" type="number" min="1" max="31"></div>
+      <div class="form-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Actual Day of Month</label><select id="cv-day"></select></div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" id="cv-reset-btn" onclick="resetConfirmedVar()" style="display:none">Reset to avg</button>
-      <button class="btn btn-secondary" onclick="closeModal('confirm-var-overlay')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveConfirmedVar()">Confirm</button>
-    </div>
-  </div>
-</div>
-
-<!-- CONFIRM VARIABLE MODAL -->
-<div class="modal-overlay" id="confirm-var-overlay">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <h2 id="cv-title">Confirm Amount</h2>
-    <div style="font-size:12px;color:var(--muted);margin:-12px 0 20px" id="cv-month"></div>
-    <div class="edit-fields">
-      <div class="form-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Due Day of Month</label><input id="cv-day" type="number" min="1" max="31"></div>
-    </div>
-    <div class="btn-row">
+      <button class="btn btn-secondary" id="cv-reset-btn" onclick="resetConfirmedVar()" style="display:none">Reset to default</button>
       <button class="btn btn-secondary" onclick="closeModal('confirm-var-overlay')">Cancel</button>
       <button class="btn btn-primary" onclick="saveConfirmedVar()">Confirm</button>
     </div>
@@ -579,13 +548,10 @@ const DEFAULT_DATA = {
 };
 
 let data = null;
-let budgetMonth = new Date();
-budgetMonth.setDate(1);
 let editAccountId = null;
 let editItemType = null;
 let editItemId = null;
 let wizardState = {};
-let currentBudgetTab = 'all';
 
 // ===== SYNC STATE =====
 const sync = {
@@ -1066,7 +1032,8 @@ function renderCurrentPage() {
   if (!active) return;
   const id = active.id.replace('page-', '');
   if (id === 'home') renderHome();
-  else if (id === 'budget') renderBudget();
+  else if (id === 'expenses') renderExpenses();
+  else if (id === 'income') renderIncome();
   else if (id === 'settings') renderSettings();
 }
 
@@ -1118,7 +1085,9 @@ function lastDayOfMonth(year, month) {
 }
 
 // ===== RECURRENCE ENGINE =====
-// Returns [{date, amount, estimated, monthKey}] — estimated=true means variable with no confirmed override
+// Returns [{date, amount, estimated, overridden, monthKey}]
+// estimated=true means variable with no confirmed override (shown amber, uses the average)
+// overridden=true means a manual per-month override is applied (any bill type, e.g. adjusted from the payment history view)
 function getOccurrences(item, fromDate, toDate) {
   const from = new Date(fromDate); from.setHours(0,0,0,0);
   const to = new Date(toDate); to.setHours(23,59,59,999);
@@ -1127,11 +1096,13 @@ function getOccurrences(item, fromDate, toDate) {
   const isVar = item.type === 'variable';
 
   function mkOcc(d, mk) {
-    const ov = isVar ? (item.overrides || {})[mk] : null;
+    const ov = (item.overrides || {})[mk];
+    const applied = !!(ov && ov.confirmed && ov.amount);
     return {
       date: new Date(d),
-      amount: (ov && ov.confirmed && ov.amount) ? ov.amount : item.amount,
-      estimated: isVar && !(ov && ov.confirmed),
+      amount: applied ? ov.amount : item.amount,
+      estimated: isVar && !applied,
+      overridden: applied,
       monthKey: mk
     };
   }
@@ -1154,15 +1125,17 @@ function getOccurrences(item, fromDate, toDate) {
       if (m === 0) { y--; m = 11; } else m--;
       for (let i = 0; i < 24; i++) {
         const mk = `${y}-${String(m+1).padStart(2,'0')}`;
-        const ov = isVar ? (item.overrides || {})[mk] : null;
-        const effDay = (ov && ov.confirmed && ov.dayOfMonth) ? ov.dayOfMonth : dom;
+        const ov = (item.overrides || {})[mk];
+        const applied = !!(ov && ov.confirmed);
+        const effDay = (applied && ov.dayOfMonth) ? ov.dayOfMonth : dom;
         const actualDay = Math.min(effDay, lastDayOfMonth(y, m));
         const d = new Date(y, m, actualDay);
         if (d > to) break;
         if (d >= from) results.push({
           date: d,
-          amount: (ov && ov.confirmed && ov.amount) ? ov.amount : item.amount,
-          estimated: isVar && !(ov && ov.confirmed),
+          amount: (applied && ov.amount) ? ov.amount : item.amount,
+          estimated: isVar && !applied,
+          overridden: applied,
           monthKey: mk
         });
         m++; if (m > 11) { m = 0; y++; }
@@ -1226,6 +1199,13 @@ const BILL_GROUPS = [
   { title: 'Utility Bills',   cats: ['utilities'] },
   { title: 'Other Expenses',  cats: ['debt', 'credit', 'other'] },
 ];
+
+// A <select> of 1-31 avoids the mobile number keyboard entirely for day-of-month fields
+function dayOptionsHTML(selected) {
+  let h = '';
+  for (let d = 1; d <= 31; d++) h += `<option value="${d}" ${d === selected ? 'selected' : ''}>${d}</option>`;
+  return h;
+}
 
 // ===== RENDER HOME =====
 function renderHome() {
@@ -1358,10 +1338,12 @@ function openConfirmModal(itemId, monthKey) {
   const ov = (item.overrides || {})[monthKey];
   const [yr, mn] = monthKey.split('-').map(Number);
   const monthLabel = new Date(yr, mn - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+  const isVar = item.type === 'variable';
+  const currentDay = ov ? (ov.dayOfMonth || item.dayOfMonth || 1) : (item.dayOfMonth || 1);
   document.getElementById('cv-title').textContent = item.name;
-  document.getElementById('cv-sub').textContent = `${monthLabel} · Average: ${fmt(item.amount)}`;
+  document.getElementById('cv-sub').textContent = `${monthLabel} · ${isVar ? 'Average' : 'Scheduled'}: ${fmt(item.amount)}`;
   document.getElementById('cv-amount').value = ov ? ov.amount : item.amount;
-  document.getElementById('cv-day').value = ov ? (ov.dayOfMonth || item.dayOfMonth || 1) : (item.dayOfMonth || 1);
+  document.getElementById('cv-day').innerHTML = dayOptionsHTML(currentDay);
   document.getElementById('cv-reset-btn').style.display = (ov && ov.confirmed) ? '' : 'none';
   document.getElementById('confirm-var-overlay').classList.add('open');
 }
@@ -1425,14 +1407,19 @@ function renderExpenseHistory() {
   const avg = total / 12;
   const isVar = item.type === 'variable';
 
+  const rowLabel = occ => occ.estimated ? 'Estimated — tap to confirm'
+    : isVar ? 'Confirmed — tap to adjust'
+    : occ.overridden ? 'Adjusted — tap to change'
+    : 'Tap to adjust this payment';
+
   const rowsHTML = occs.length === 0
     ? '<div class="empty"><div class="em-icon">📭</div><p>No payments this year</p></div>'
     : `<div class="budget-list" style="padding:0">${occs.map(occ => `
-        <div class="budget-item${isVar ? ' estimated-row' : ''}" ${isVar ? `onclick="openConfirmModal('${item.id}','${occ.monthKey}')"` : ''}>
+        <div class="budget-item ${occ.estimated ? 'estimated-row' : 'clickable'}" onclick="openConfirmModal('${item.id}','${occ.monthKey}')">
           <div class="bi-icon cat-${item.category || 'other'}">${CAT_ICON[item.category] || '📦'}</div>
           <div class="bi-info">
             <div class="bi-name">${fmtDate(occ.date)}</div>
-            <div class="bi-sub">${occ.estimated ? 'Estimated — tap to confirm' : (isVar ? 'Confirmed — tap to adjust' : 'Fixed')}</div>
+            <div class="bi-sub">${rowLabel(occ)}</div>
           </div>
           <div class="bi-amt" style="color:${occ.estimated ? 'var(--warn)' : 'var(--expense)'}">${occ.estimated ? '~' : ''}${fmt(occ.amount)}</div>
         </div>
@@ -1445,7 +1432,7 @@ function renderExpenseHistory() {
       <button onclick="changeHistYear(1)">&#8250;</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">
-      ${occs.length} payment${occs.length === 1 ? '' : 's'} this year${isVar ? ' · tap a row to confirm the actual amount' : ''}
+      ${occs.length} payment${occs.length === 1 ? '' : 's'} this year · tap a row to edit the amount
     </div>
     ${rowsHTML}
     <div class="summary-row" style="padding:16px 0 0">
@@ -1456,94 +1443,22 @@ function renderExpenseHistory() {
 }
 
 // ===== RENDER BUDGET =====
-function renderBudget() {
-  const y = budgetMonth.getFullYear(), m = budgetMonth.getMonth();
-  document.getElementById('budget-month-label').textContent =
-    budgetMonth.toLocaleDateString('en-CA', {month:'long',year:'numeric'});
-
-  const from = new Date(y, m, 1), to = new Date(y, m + 1, 0);
-  const events = getEvents(from, to);
-
-  const totalIncome = events.filter(e => e.type === 'income').reduce((s,e) => s + e.amount, 0);
-  const totalExpense = events.filter(e => e.type === 'expense').reduce((s,e) => s + e.amount, 0);
-  const net = totalIncome - totalExpense;
-
-  document.getElementById('budget-summary').innerHTML = `
-    <div class="summary-card"><div class="s-label">Income</div><div class="s-amount income">${fmt(totalIncome)}</div></div>
-    <div class="summary-card"><div class="s-label">Expenses</div><div class="s-amount expense">${fmt(totalExpense)}</div></div>
-    <div class="summary-card"><div class="s-label">Net</div><div class="s-amount net ${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '-'}${fmt(Math.abs(net))}</div></div>
-  `;
-
-  const filtered = events.filter(e =>
-    currentBudgetTab === 'all' ? true :
-    currentBudgetTab === 'income' ? e.type === 'income' : e.type === 'expense'
-  );
-
-  document.getElementById('budget-list').innerHTML = filtered.length === 0
-    ? '<div class="empty"><div class="em-icon">📭</div><p>No entries this month</p></div>'
-    : filtered.map(ev => {
-        const cat = ev.item.category || (ev.type === 'income' ? 'income' : 'other');
-        const clickable = ev.type === 'expense';
-        return `
-          <div class="budget-item${clickable ? ' clickable' : ''}" ${clickable ? `onclick="openExpenseHistory('${ev.item.id}')"` : ''}>
-            <div class="bi-icon cat-${cat}">${CAT_ICON[cat] || '📦'}</div>
-            <div class="bi-info">
-              <div class="bi-name">${ev.item.name}</div>
-              <div class="bi-sub">${fmtDateShort(ev.date)} · ${getAccount(ev.item.account).name}</div>
-            </div>
-            <div class="bi-amt" style="color:${ev.type === 'income' ? 'var(--income)' : 'var(--expense)'}">
-              ${ev.type === 'income' ? '+' : '-'}${fmt(ev.amount)}
-            </div>
-          </div>
-        `;
-      }).join('');
-}
-
-function changeMonth(dir) {
-  budgetMonth.setMonth(budgetMonth.getMonth() + dir);
-  renderBudget();
-}
-
-function selectBudgetTab(el, tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  currentBudgetTab = tab;
-  renderBudget();
-}
-
-// ===== RENDER SETTINGS =====
-function renderSettings() {
-  document.getElementById('settings-accounts').innerHTML = data.accounts.map(a => `
-    <div class="settings-row" onclick="editAccount('${a.id}')">
-      <div class="sr-left">
-        <div class="sr-title">${a.name}</div>
-        <div class="sr-sub">Balance: ${fmt(a.balance)}</div>
-      </div>
-      <div class="sr-right">${fmt(a.balance)} ›</div>
-    </div>
-  `).join('');
-
-  document.getElementById('settings-income').innerHTML = data.income.map(item => `
-    <div class="settings-row" onclick="editItem('income','${item.id}')">
-      <div class="sr-left">
-        <div class="sr-title">${item.name}</div>
-        <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
-      </div>
-      <div class="sr-right" style="color:${item.active?'var(--income)':'var(--muted)'}">
-        ${item.active ? '●' : '○'} ›
-      </div>
-    </div>
-  `).join('') || '<div class="settings-row" style="color:var(--muted)"><div class="sr-left"><div class="sr-title">No income sources</div></div></div>';
+// ===== RENDER EXPENSES =====
+function renderExpenses() {
+  const t = today();
+  const from = new Date(t.getFullYear(), t.getMonth(), 1), to = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  const monthTotal = getEvents(from, to).filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
+  document.getElementById('expenses-month-total').textContent = `This month: ${fmt(monthTotal)}`;
 
   const assignedCats = new Set(BILL_GROUPS.flatMap(g => g.cats));
   const billRow = item => `
-    <div class="settings-row" onclick="editItem('bill','${item.id}')">
+    <div class="settings-row" onclick="openExpenseHistory('${item.id}')">
       <div class="sr-left">
         <div class="sr-title">${item.name}${item.type === 'variable' ? ' <span style="font-size:10px;color:var(--warn);font-weight:600;vertical-align:middle">VAR</span>' : ''}</div>
         <div class="sr-sub">${item.type === 'variable' ? '~' : ''}${fmt(item.amount)} · ${recurrenceLabel(item)}</div>
       </div>
       <div class="sr-right" style="color:${item.active ? 'var(--expense)' : 'var(--muted)'}">
-        <button class="sr-history-btn" title="Payment history" onclick="event.stopPropagation();openExpenseHistory('${item.id}')">📅</button>
+        <button class="sr-history-btn" title="Edit" onclick="event.stopPropagation();editItem('bill','${item.id}')">✏️</button>
         ${item.active ? '●' : '○'} ›
       </div>
     </div>`;
@@ -1560,7 +1475,45 @@ function renderSettings() {
     ? `<div class="section-title">Other Expenses</div><div class="settings-section">${otherBills.map(billRow).join('')}</div>`
     : '';
 
-  document.getElementById('settings-bills').innerHTML = groupedHTML + otherHTML;
+  document.getElementById('expenses-list').innerHTML = (groupedHTML + otherHTML) ||
+    '<div class="empty"><div class="em-icon">🧾</div><p>No expenses yet — tap "Add Expense" to create one</p></div>';
+}
+
+// ===== RENDER INCOME =====
+function renderIncome() {
+  const t = today();
+  const from = new Date(t.getFullYear(), t.getMonth(), 1), to = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  const monthTotal = getEvents(from, to).filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
+  document.getElementById('income-month-total').textContent = `This month: ${fmt(monthTotal)}`;
+
+  document.getElementById('income-list').innerHTML = data.income.length ? `
+    <div class="settings-section">
+      ${data.income.map(item => `
+        <div class="settings-row" onclick="editItem('income','${item.id}')">
+          <div class="sr-left">
+            <div class="sr-title">${item.name}</div>
+            <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)} · ${getAccount(item.account).name}</div>
+          </div>
+          <div class="sr-right" style="color:${item.active ? 'var(--income)' : 'var(--muted)'}">
+            ${item.active ? '●' : '○'} ›
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  ` : '<div class="empty"><div class="em-icon">💰</div><p>No income sources yet — tap "Add Income Stream" to create one</p></div>';
+}
+
+// ===== RENDER SETTINGS =====
+function renderSettings() {
+  document.getElementById('settings-accounts').innerHTML = data.accounts.map(a => `
+    <div class="settings-row" onclick="editAccount('${a.id}')">
+      <div class="sr-left">
+        <div class="sr-title">${a.name}</div>
+        <div class="sr-sub">Balance: ${fmt(a.balance)}</div>
+      </div>
+      <div class="sr-right">${fmt(a.balance)} ›</div>
+    </div>
+  `).join('');
 
   // Sync settings
   const methodLabel = sync.method === 'drive' ? 'Google Drive' :
@@ -1610,7 +1563,8 @@ function openPage(name) {
   const sb = document.getElementById(`snav-${name}`);
   if (sb) sb.classList.add('active');
   if (name === 'home') renderHome();
-  else if (name === 'budget') renderBudget();
+  else if (name === 'expenses') renderExpenses();
+  else if (name === 'income') renderIncome();
   else if (name === 'settings') renderSettings();
 }
 
@@ -1631,7 +1585,7 @@ function saveAccount() {
   a.balance = parseFloat(document.getElementById('ea-balance').value) || 0;
   saveData();
   closeModal('edit-account-overlay');
-  renderSettings();
+  renderCurrentPage();
   showToast('Account updated');
 }
 
@@ -1649,7 +1603,7 @@ function editItem(type, id) {
   document.getElementById('edit-item-body').innerHTML = `
     <div class="edit-fields">
       <div class="form-group"><label>Name</label><input id="ei-name" type="text" value="${item.name}"></div>
-      <div class="form-group"><label>Amount (CAD)</label><input id="ei-amount" type="number" step="0.01" value="${item.amount}"></div>
+      <div class="form-group"><label>Amount (CAD)</label><input id="ei-amount" type="number" inputmode="decimal" step="0.01" value="${item.amount}"></div>
       <div class="form-group"><label>Account</label><select id="ei-account">
         ${data.accounts.map(a => `<option value="${a.id}" ${item.account===a.id?'selected':''}>${a.name}</option>`).join('')}
       </select></div>
@@ -1662,7 +1616,7 @@ function editItem(type, id) {
         <option value="once" ${item.recurrence==='once'?'selected':''}>One time</option>
       </select></div>
       <div class="form-group">
-        <label>Day of Month</label><input id="ei-dayofmonth" type="number" min="1" max="31" value="${item.dayOfMonth||item.daysOfMonth?.[0]||1}">
+        <label>Day of Month</label><select id="ei-dayofmonth">${dayOptionsHTML(item.dayOfMonth||item.daysOfMonth?.[0]||1)}</select>
       </div>
       <div class="form-group">
         <label>Start Date</label><input id="ei-startdate" type="date" value="${item.startDate||''}">
@@ -1704,7 +1658,7 @@ function saveItem() {
   item.active = document.getElementById('ei-active').checked;
   saveData();
   closeModal('edit-item-overlay');
-  renderSettings();
+  renderCurrentPage();
   showToast('Saved');
 }
 
@@ -1714,46 +1668,31 @@ function deleteItem() {
   else data.bills = data.bills.filter(i => i.id !== editItemId);
   saveData();
   closeModal('edit-item-overlay');
-  renderSettings();
+  renderCurrentPage();
   showToast('Deleted');
 }
 
 // ===== WIZARD =====
-function openWizard() {
+// type is preset by the page that opened it ('expense' from Expenses, 'income' from Income) — no type-picker step needed
+function openWizard(type) {
   wizardState = {
-    step: 1, type: null, name: '', amount: 0,
+    step: 1, type, name: '', amount: 0,
     account: data.accounts[0]?.id, recurrence: 'monthly',
     dayOfMonth: 1, daysOfMonth: [1, 15],
     startDate: isoDate(today()), category: 'other', active: true, isVariable: false
   };
+  document.getElementById('wizard-title').textContent = type === 'income' ? 'Add Income' : 'Add Expense';
   renderWizardStep();
   document.getElementById('wizard-overlay').classList.add('open');
 }
 
 function renderWizardStep() {
-  document.getElementById('wizard-steps').innerHTML = Array.from({length:4}, (_,i) =>
+  document.getElementById('wizard-steps').innerHTML = Array.from({length:3}, (_,i) =>
     `<div class="step ${i < wizardState.step ? 'done' : ''}"></div>`
   ).join('');
-  const titles = ['','What type?','Details','Schedule','Review'];
-  document.getElementById('wizard-title').textContent = titles[wizardState.step] || 'Add';
   const body = document.getElementById('wizard-body');
 
   if (wizardState.step === 1) {
-    body.innerHTML = `
-      <div class="type-picker">
-        <div class="type-btn ${wizardState.type==='income'?'selected income':''}" onclick="setWizardType('income')">
-          <span class="tb-icon">💰</span>Income
-        </div>
-        <div class="type-btn ${wizardState.type==='expense'?'selected expense':''}" onclick="setWizardType('expense')">
-          <span class="tb-icon">💸</span>Bill / Expense
-        </div>
-      </div>
-      <div class="btn-row" style="margin-top:24px">
-        <button class="btn btn-secondary" onclick="closeModal('wizard-overlay')">Cancel</button>
-        <button class="btn btn-primary" onclick="wizardNext()" ${!wizardState.type?'disabled':''}>Next</button>
-      </div>
-    `;
-  } else if (wizardState.step === 2) {
     const catOpts = wizardState.type === 'expense' ?
       ['housing','utilities','insurance','education','debt','credit','other'].map(c =>
         `<option value="${c}" ${wizardState.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
@@ -1763,7 +1702,7 @@ function renderWizardStep() {
         <input id="w-name" type="text" placeholder="e.g. Netflix" value="${wizardState.name}" oninput="wizardState.name=this.value">
       </div>
       <div class="form-group"><label>Amount (CAD)</label>
-        <input id="w-amount" type="number" step="0.01" placeholder="0.00" value="${wizardState.amount||''}" oninput="wizardState.amount=parseFloat(this.value)||0">
+        <input id="w-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${wizardState.amount||''}" oninput="wizardState.amount=parseFloat(this.value)||0">
       </div>
       <div class="form-group"><label>Account</label>
         <select onchange="wizardState.account=this.value">
@@ -1780,11 +1719,11 @@ function renderWizardStep() {
         <label class="toggle"><input type="checkbox" ${wizardState.isVariable?'checked':''} onchange="wizardState.isVariable=this.checked"><span class="slider"></span></label>
       </div>` : ''}
       <div class="btn-row">
-        <button class="btn btn-secondary" onclick="wizardBack()">Back</button>
+        <button class="btn btn-secondary" onclick="closeModal('wizard-overlay')">Cancel</button>
         <button class="btn btn-primary" onclick="wizardNext()">Next</button>
       </div>
     `;
-  } else if (wizardState.step === 3) {
+  } else if (wizardState.step === 2) {
     body.innerHTML = `
       <div class="form-group"><label>How often?</label>
         <div class="pills">
@@ -1800,7 +1739,7 @@ function renderWizardStep() {
       </div>
     `;
     renderWizardScheduleFields();
-  } else if (wizardState.step === 4) {
+  } else if (wizardState.step === 3) {
     body.innerHTML = `
       <div class="card" style="margin-bottom:20px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -1833,23 +1772,21 @@ function renderWizardScheduleFields() {
     </div>`;
   } else if (r === 'monthly') {
     c.innerHTML = `<div class="form-group"><label>Day of Month</label>
-      <input type="number" min="1" max="31" value="${wizardState.dayOfMonth}" onchange="wizardState.dayOfMonth=parseInt(this.value)||1">
+      <select onchange="wizardState.dayOfMonth=parseInt(this.value)||1">${dayOptionsHTML(wizardState.dayOfMonth)}</select>
     </div>`;
   } else if (r === 'twicemonthly') {
     c.innerHTML = `<div class="form-group"><label>First Day</label>
-      <input type="number" min="1" max="31" value="${wizardState.daysOfMonth[0]}" onchange="wizardState.daysOfMonth[0]=parseInt(this.value)||1">
+      <select onchange="wizardState.daysOfMonth[0]=parseInt(this.value)||1">${dayOptionsHTML(wizardState.daysOfMonth[0])}</select>
     </div>
     <div class="form-group"><label>Second Day</label>
-      <input type="number" min="1" max="31" value="${wizardState.daysOfMonth[1]}" onchange="wizardState.daysOfMonth[1]=parseInt(this.value)||15">
+      <select onchange="wizardState.daysOfMonth[1]=parseInt(this.value)||15">${dayOptionsHTML(wizardState.daysOfMonth[1])}</select>
     </div>`;
   }
 }
 
-function setWizardType(t) { wizardState.type = t; renderWizardStep(); }
 function setWizardRec(r) { wizardState.recurrence = r; renderWizardStep(); }
 function wizardNext() {
-  if (wizardState.step === 1 && !wizardState.type) return;
-  if (wizardState.step === 2 && !wizardState.name) { showToast('Enter a name'); return; }
+  if (wizardState.step === 1 && !wizardState.name) { showToast('Enter a name'); return; }
   wizardState.step++; renderWizardStep();
 }
 function wizardBack() { wizardState.step--; renderWizardStep(); }
@@ -1872,7 +1809,7 @@ function wizardSave() {
   }
   saveData();
   closeModal('wizard-overlay');
-  renderHome();
+  renderCurrentPage();
   showToast(`${wizardState.name} added!`);
 }
 
@@ -1905,7 +1842,7 @@ function importData(event) {
       if (!imported.accounts || !imported.bills) throw new Error('Invalid');
       data = imported;
       saveData();
-      renderHome(); renderSettings();
+      renderHome(); renderExpenses(); renderIncome(); renderSettings();
       showToast('Data imported!');
     } catch(err) { showToast('Import failed — invalid file'); }
   };
@@ -1917,7 +1854,7 @@ function resetConfirm() {
   if (!confirm('Reset all data to defaults? This cannot be undone.')) return;
   localStorage.removeItem('pf_data_v2');
   loadData();
-  renderHome(); renderSettings();
+  renderHome(); renderExpenses(); renderIncome(); renderSettings();
   showToast('Reset to defaults');
 }
 
