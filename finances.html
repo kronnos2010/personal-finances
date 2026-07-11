@@ -403,6 +403,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   <!-- SETTINGS PAGE -->
   <div id="page-settings" class="page">
     <div class="section-title">Accounts</div>
+    <button class="page-add-btn" onclick="addAccount()">＋ Add Account</button>
     <div class="settings-section" id="settings-accounts"></div>
     <div class="section-title">Sync</div>
     <div class="settings-section" id="settings-sync"></div>
@@ -473,7 +474,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 <div class="modal-overlay" id="edit-account-overlay">
   <div class="modal">
     <div class="modal-handle"></div>
-    <h2>Edit Account</h2>
+    <h2 id="ea-title">Edit Account</h2>
     <div class="edit-fields">
       <div class="form-group"><label>Account Name</label><input id="ea-name" type="text"></div>
       <div class="form-group"><label>Current Balance (CAD)</label><input id="ea-balance" type="number" inputmode="decimal" step="0.01"></div>
@@ -1598,16 +1599,42 @@ function editAccount(id) {
   editAccountId = id;
   const a = data.accounts.find(a => a.id === id);
   if (!a) return;
+  document.getElementById('ea-title').textContent = 'Edit Account';
   document.getElementById('ea-name').value = a.name;
   document.getElementById('ea-balance').value = a.balance;
   document.getElementById('edit-account-overlay').classList.add('open');
 }
 
+// editAccountId = null is the sentinel for "creating a new account" — saveAccount() branches on it.
+// Without this, resetting all data leaves accounts:[] with no way to recover through the UI at all,
+// since the account dropdowns everywhere (bills/income wizard, edit-item) come from data.accounts.
+function addAccount() {
+  editAccountId = null;
+  document.getElementById('ea-title').textContent = 'Add Account';
+  document.getElementById('ea-name').value = '';
+  document.getElementById('ea-balance').value = '';
+  document.getElementById('edit-account-overlay').classList.add('open');
+}
+
 function saveAccount() {
+  const name = document.getElementById('ea-name').value.trim();
+  const parsedBalance = parseFloat(document.getElementById('ea-balance').value);
+  const balance = isNaN(parsedBalance) ? 0 : parsedBalance;
+
+  if (editAccountId === null) {
+    if (!name) { showToast('Enter an account name'); return; }
+    data.accounts.push({ id: 'acct-' + Date.now(), name, balance });
+    saveData();
+    closeModal('edit-account-overlay');
+    renderCurrentPage();
+    showToast('Account added ✓');
+    return;
+  }
+
   const a = data.accounts.find(a => a.id === editAccountId);
   if (!a) return;
-  a.name = document.getElementById('ea-name').value.trim() || a.name;
-  a.balance = parseFloat(document.getElementById('ea-balance').value) || 0;
+  a.name = name || a.name;
+  a.balance = balance;
   saveData();
   closeModal('edit-account-overlay');
   renderCurrentPage();
