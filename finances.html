@@ -11,6 +11,11 @@
   --bg:#0f172a;--surface:#1e293b;--surface2:#273449;--border:#334155;
   --text:#f1f5f9;--muted:#94a3b8;--income:#22c55e;--expense:#ef4444;
   --accent:#3b82f6;--warn:#f59e0b;--radius:12px;--nav:60px;
+  /* Darker than --income specifically for chart marks on the dark surface — the UI's --income
+     (#22c55e, OKLCH L≈0.72) sits above the dark-mode chart lightness band (validated via the
+     dataviz skill's palette checker); #16a34a keeps the same hue and passes cleanly (L, CVD
+     separation from --expense, and contrast all pass). UI elements keep --income unchanged. */
+  --chart-income:#16a34a;
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;overflow:hidden}
 #app{display:flex;flex-direction:column;height:100%;max-width:480px;margin:0 auto;position:relative}
@@ -44,6 +49,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .acct-section-name{font-size:15px;font-weight:700}
 .acct-section-bal{font-size:14px;font-weight:600;color:var(--muted)}
 .acct-section-empty{padding:16px 0;color:var(--muted);font-size:13px}
+/* Reports charts */
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:0 20px 16px}
+.chart-title{font-size:14px;font-weight:700;margin-bottom:2px}
+.chart-sub{font-size:12px;color:var(--muted);margin-bottom:12px}
+.chart-svg{width:100%;height:auto;display:block}
+.chart-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px}
+.chart-legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.chart-legend-swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.chart-empty{padding:24px 0;text-align:center;color:var(--muted);font-size:13px}
+.cat-row{display:flex;align-items:center;gap:10px;padding:9px 0}
+.cat-row-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.cat-row-body{flex:1;min-width:0}
+.cat-row-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+.cat-row-name{font-weight:500}
+.cat-row-amt{font-weight:600}
+.cat-row-bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.cat-row-bar-fill{height:100%;border-radius:3px;background:var(--expense)}
 .tl-group{margin-bottom:4px}
 .tl-date-header{font-size:12px;font-weight:600;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 .tl-date-header .days-away{font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:20px}
@@ -274,6 +296,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   /* Settings */
   .settings-section{margin:0 40px 20px}
 
+  /* Reports */
+  .chart-card{margin:0 40px 20px}
+
   /* Hide bottom nav */
   .bottom-nav{display:none}
 
@@ -333,6 +358,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <button class="sidebar-btn" id="snav-income" onclick="openPage('income')">
         <span class="snav-icon">💰</span><span>Income</span>
       </button>
+      <button class="sidebar-btn" id="snav-reports" onclick="openPage('reports')">
+        <span class="snav-icon">📊</span><span>Reports</span>
+      </button>
       <button class="sidebar-btn" id="snav-settings" onclick="openPage('settings')">
         <span class="snav-icon">⚙️</span><span>Settings</span>
       </button>
@@ -372,6 +400,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="home-panel home-panel-left">
         <div class="section-title">Accounts</div>
         <div class="accounts-scroll" id="accounts-list"></div>
+        <button class="page-add-btn" onclick="openQuickTx()">＋ Add Transaction</button>
       </div>
       <div class="home-panel home-panel-right">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -403,6 +432,41 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     </div>
     <button class="page-add-btn" onclick="openWizard('income')">＋ Add Income Stream</button>
     <div id="income-list"></div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- REPORTS PAGE -->
+  <div id="page-reports" class="page">
+    <div class="section-title">Reports</div>
+
+    <div class="chart-card">
+      <div class="chart-title">Cash Flow Forecast</div>
+      <div class="chart-sub">Projected combined balance for the next 9 months — see when you might be short, or have a surplus to move into savings</div>
+      <div id="cf-chart"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="month-nav" style="padding:0 0 4px">
+        <button onclick="changeReportsYear(-1)">&#8249;</button>
+        <h2 id="reports-year-label" style="font-size:15px"></h2>
+        <button onclick="changeReportsYear(1)">&#8250;</button>
+      </div>
+      <div class="chart-sub">Yearly overview</div>
+      <div class="summary-row" id="reports-year-summary" style="padding:0 0 14px"></div>
+      <div class="chart-title" style="margin-bottom:2px">Income vs Expenses</div>
+      <div class="chart-sub">Excludes transfers between your own accounts</div>
+      <div id="ie-chart"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="month-nav" style="padding:0 0 4px">
+        <button onclick="changeReportsMonth(-1)">&#8249;</button>
+        <h2 id="reports-month-label" style="font-size:15px"></h2>
+        <button onclick="changeReportsMonth(1)">&#8250;</button>
+      </div>
+      <div class="chart-sub">Spending by category — how much went where this month</div>
+      <div id="cat-breakdown"></div>
+    </div>
     <div style="height:20px"></div>
   </div>
 
@@ -449,6 +513,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     </button>
     <button class="nav-btn" id="nav-income" onclick="openPage('income')">
       <span class="icon">💰</span><span>Income</span>
+    </button>
+    <button class="nav-btn" id="nav-reports" onclick="openPage('reports')">
+      <span class="icon">📊</span><span>Reports</span>
     </button>
     <button class="nav-btn" id="nav-settings" onclick="openPage('settings')">
       <span class="icon">⚙️</span><span>Settings</span>
@@ -535,6 +602,27 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   </div>
 </div>
 
+<!-- QUICK TRANSACTION MODAL (one-off expense/income/transfer) -->
+<div class="modal-overlay" id="quick-tx-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Add Transaction</h2>
+    <div class="form-group">
+      <label>Type</label>
+      <div class="pills" id="qtx-type-pills">
+        <div class="pill selected" data-type="expense" onclick="setQuickTxType('expense')">💸 Expense</div>
+        <div class="pill" data-type="income" onclick="setQuickTxType('income')">💰 Income</div>
+        <div class="pill" data-type="transfer" onclick="setQuickTxType('transfer')">⇄ Transfer</div>
+      </div>
+    </div>
+    <div id="quick-tx-body"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('quick-tx-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveQuickTx()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -551,7 +639,8 @@ const DEFAULT_DATA = {
   lastModified: 0,
   accounts: [],
   income: [],
-  bills: []
+  bills: [],
+  transfers: []
 };
 
 let data = null;
@@ -1041,6 +1130,7 @@ function renderCurrentPage() {
   if (id === 'home') renderHome();
   else if (id === 'expenses') renderExpenses();
   else if (id === 'income') renderIncome();
+  else if (id === 'reports') renderReports();
   else if (id === 'settings') renderSettings();
 }
 
@@ -1050,6 +1140,7 @@ function loadData() {
     const raw = localStorage.getItem('pf_data_v2');
     data = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_DATA));
     if (!data.lastModified) data.lastModified = 0;
+    if (!Array.isArray(data.transfers)) data.transfers = []; // older saved data predates transfers
   } catch(e) {
     data = JSON.parse(JSON.stringify(DEFAULT_DATA));
   }
@@ -1224,6 +1315,23 @@ function getOccurrences(item, fromDate, toDate) {
   return results;
 }
 
+// A transfer between two of the user's own accounts is not real income or spending — it nets to zero
+// across all accounts. It still needs to show up in each affected account's own cash flow, so it's
+// emitted as a paired expense (source) + income (destination) event, flagged isTransfer so Reports
+// can exclude it from income/expense/category totals while Cash Flow still reflects the balance moves.
+function getTransferEvents(from, to) {
+  const events = [];
+  for (const t of (data.transfers || [])) {
+    if (t.active === false) continue;
+    const d = parseDate(t.date);
+    if (d < from || d > to) continue;
+    const label = t.note ? t.note : 'Transfer';
+    events.push({ date: d, type: 'expense', item: { id: t.id, name: `${label} → ${getAccount(t.toAccount).name}`, account: t.fromAccount }, amount: t.amount, estimated: false, monthKey: isoDate(d), isTransfer: true });
+    events.push({ date: d, type: 'income', item: { id: t.id, name: `${label} ← ${getAccount(t.fromAccount).name}`, account: t.toAccount }, amount: t.amount, estimated: false, monthKey: isoDate(d), isTransfer: true });
+  }
+  return events;
+}
+
 function getEvents(from, to) {
   const events = [];
   for (const item of data.income)
@@ -1232,6 +1340,7 @@ function getEvents(from, to) {
   for (const item of data.bills)
     for (const occ of getOccurrences(item, from, to))
       events.push({ date: occ.date, type: 'expense', item, amount: occ.amount, estimated: occ.estimated, monthKey: occ.monthKey });
+  events.push(...getTransferEvents(from, to));
   events.sort((a, b) => a.date - b.date);
   return events;
 }
@@ -1272,6 +1381,202 @@ function parseDayValue(val) {
   if (val === 'last') return 'last';
   const n = parseInt(val);
   return isNaN(n) ? null : n;
+}
+
+// ===== CHARTS (hand-rolled inline SVG — no external library) =====
+const CHART_INCOME = 'var(--chart-income)'; // darker green, validated for dark-surface chart marks
+const CHART_EXPENSE = 'var(--expense)';
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtCompact(n) {
+  const abs = Math.abs(n), sign = n < 0 ? '-' : '';
+  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}K`;
+  return `${sign}$${Math.round(abs)}`;
+}
+
+function niceStep(rough) {
+  if (!rough || !isFinite(rough)) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const frac = rough / pow;
+  const niceFrac = frac < 1.5 ? 1 : frac < 3 ? 2 : frac < 7 ? 5 : 10;
+  return niceFrac * pow;
+}
+
+// Clean, evenly-spaced y-axis tick values spanning at least [min, max]
+function niceTicks(min, max, count) {
+  if (min === max) { min -= 1; max += 1; }
+  const step = niceStep((max - min) / count) || 1;
+  const niceMin = Math.floor(min / step) * step;
+  const niceMax = Math.ceil(max / step) * step;
+  const ticks = [];
+  for (let v = niceMin; v <= niceMax + step * 0.001; v += step) ticks.push(Math.round(v * 100) / 100);
+  return ticks;
+}
+
+function scaleLinear(domainMin, domainMax, rangeMin, rangeMax) {
+  const span = (domainMax - domainMin) || 1;
+  return v => rangeMin + ((v - domainMin) / span) * (rangeMax - rangeMin);
+}
+
+// A rect with only its two "far from baseline" corners rounded (mark spec: rounded data-end, square baseline)
+function roundedTopRectPath(x, top, w, h, r) {
+  if (h <= 0) return '';
+  r = Math.min(r, w / 2, h);
+  if (r <= 0) return `M${x},${top + h} L${x},${top} L${x + w},${top} L${x + w},${top + h} Z`;
+  return `M${x},${top + h} L${x},${top + r} Q${x},${top} ${x + r},${top} L${x + w - r},${top} Q${x + w},${top} ${x + w},${top + r} L${x + w},${top + h} Z`;
+}
+
+// Combined-balance running total after every future event — used to warn when the user will be
+// short on money, or when there's a comfortable surplus to move into savings. Reuses the exact
+// $0 / $500 thresholds already used for the timeline balance coloring elsewhere in this app.
+function getForecastSeries(months) {
+  const t = today();
+  const to = new Date(t.getFullYear(), t.getMonth() + months, t.getDate());
+  const events = getEvents(t, to);
+  const startBalance = data.accounts.reduce((s, a) => s + a.balance, 0);
+  const byDate = {};
+  for (const ev of events) {
+    const key = isoDate(ev.date);
+    byDate[key] = (byDate[key] || 0) + (ev.type === 'income' ? ev.amount : -ev.amount);
+  }
+  const points = [{ date: new Date(t), balance: startBalance }];
+  let running = startBalance;
+  for (const [key, net] of Object.entries(byDate)) {
+    running += net;
+    points.push({ date: parseDate(key), balance: running });
+  }
+  return points;
+}
+
+function balanceZoneColor(bal) {
+  return bal < 0 ? 'var(--expense)' : bal < 500 ? 'var(--warn)' : 'var(--income)';
+}
+
+function renderCashFlowChart() {
+  const container = document.getElementById('cf-chart');
+  if (!container) return;
+  if (!data.accounts.length) {
+    container.innerHTML = '<div class="chart-empty">Add an account to see your cash flow forecast</div>';
+    return;
+  }
+
+  const MONTHS = 9;
+  const points = getForecastSeries(MONTHS);
+  const W = 720, H = 220, PAD_L = 52, PAD_R = 14, PAD_T = 14, PAD_B = 26;
+  const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
+
+  const balances = points.map(p => p.balance);
+  const dataMin = Math.min(0, ...balances);
+  const dataMax = Math.max(500, ...balances);
+  const yTicks = niceTicks(dataMin, dataMax, 4);
+  const yMin = yTicks[0], yMax = yTicks[yTicks.length - 1];
+
+  const firstT = points[0].date.getTime(), lastT = points[points.length - 1].date.getTime();
+  const x = scaleLinear(firstT, lastT, PAD_L, PAD_L + plotW);
+  const y = scaleLinear(yMin, yMax, PAD_T + plotH, PAD_T);
+
+  let gridSvg = '', refSvg = '';
+  yTicks.forEach(v => {
+    const yy = y(v);
+    gridSvg += `<line x1="${PAD_L}" y1="${yy}" x2="${PAD_L + plotW}" y2="${yy}" style="stroke:var(--border)" stroke-width="1"/>`;
+    gridSvg += `<text x="${PAD_L - 8}" y="${yy + 4}" text-anchor="end" font-size="10" style="fill:var(--muted)">${fmtCompact(v)}</text>`;
+  });
+  if (yMin <= 0 && 0 <= yMax) {
+    refSvg += `<line x1="${PAD_L}" y1="${y(0)}" x2="${PAD_L + plotW}" y2="${y(0)}" style="stroke:var(--expense)" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
+  }
+  if (yMin <= 500 && 500 <= yMax) {
+    refSvg += `<line x1="${PAD_L}" y1="${y(500)}" x2="${PAD_L + plotW}" y2="${y(500)}" style="stroke:var(--warn)" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
+  }
+
+  let xLabelSvg = '';
+  const labelCount = Math.min(MONTHS, 6);
+  for (let i = 0; i <= labelCount; i++) {
+    const frac = i / labelCount;
+    const d = new Date(firstT + frac * (lastT - firstT));
+    xLabelSvg += `<text x="${x(d.getTime())}" y="${H - 8}" text-anchor="middle" font-size="10" style="fill:var(--muted)">${d.toLocaleDateString('en-CA', { month: 'short' })}</text>`;
+  }
+
+  let lineSvg = '', dotsSvg = '';
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const px = x(p.date.getTime()), py = y(p.balance);
+    if (i > 0) {
+      const prev = points[i - 1];
+      lineSvg += `<line x1="${x(prev.date.getTime())}" y1="${y(prev.balance)}" x2="${px}" y2="${py}" style="stroke:${balanceZoneColor(p.balance)}" stroke-width="2" stroke-linecap="round"/>`;
+    }
+    dotsSvg += `<circle cx="${px}" cy="${py}" r="4" style="fill:${balanceZoneColor(p.balance)};stroke:var(--surface)" stroke-width="2"><title>${escapeHtml(fmtDateShort(p.date))}: ${fmt(p.balance)}</title></circle>`;
+  }
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${gridSvg}${refSvg}${lineSvg}${dotsSvg}${xLabelSvg}
+    </svg>
+    <div class="chart-legend">
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--income)"></span>Healthy</div>
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--warn)"></span>Low — below $500</div>
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--expense)"></span>Below $0</div>
+    </div>
+  `;
+}
+
+// Excludes transfers — they move money between the user's own accounts and aren't real income/spending
+function getYearMonthlyTotals(year) {
+  const totals = [];
+  for (let m = 0; m < 12; m++) {
+    const from = new Date(year, m, 1), to = new Date(year, m + 1, 0);
+    const events = getEvents(from, to).filter(e => !e.isTransfer);
+    totals.push({
+      month: m,
+      income: events.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0),
+      expense: events.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0)
+    });
+  }
+  return totals;
+}
+
+function renderIncomeExpenseChart(year) {
+  const container = document.getElementById('ie-chart');
+  if (!container) return;
+
+  const totals = getYearMonthlyTotals(year);
+  const W = 720, H = 220, PAD_L = 48, PAD_R = 12, PAD_T = 14, PAD_B = 26;
+  const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
+
+  const maxVal = Math.max(1, ...totals.flatMap(t => [t.income, t.expense]));
+  const yTicks = niceTicks(0, maxVal, 4);
+  const yMax = yTicks[yTicks.length - 1];
+  const y = scaleLinear(0, yMax, PAD_T + plotH, PAD_T);
+
+  const groupW = plotW / 12;
+  const barW = Math.min(14, groupW * 0.32);
+  const gap = 3;
+
+  let gridSvg = '';
+  yTicks.forEach(v => {
+    const yy = y(v);
+    gridSvg += `<line x1="${PAD_L}" y1="${yy}" x2="${PAD_L + plotW}" y2="${yy}" style="stroke:var(--border)" stroke-width="1"/>`;
+    gridSvg += `<text x="${PAD_L - 8}" y="${yy + 4}" text-anchor="end" font-size="10" style="fill:var(--muted)">${fmtCompact(v)}</text>`;
+  });
+
+  let barsSvg = '', labelsSvg = '';
+  totals.forEach((t, i) => {
+    const cx = PAD_L + i * groupW + groupW / 2;
+    const incX = cx - gap / 2 - barW, expX = cx + gap / 2;
+    const incTop = y(t.income), expTop = y(t.expense);
+    barsSvg += `<path d="${roundedTopRectPath(incX, incTop, barW, PAD_T + plotH - incTop, 3)}" style="fill:${CHART_INCOME}"><title>${MONTH_NAMES[i]} ${year} income: ${fmt(t.income)}</title></path>`;
+    barsSvg += `<path d="${roundedTopRectPath(expX, expTop, barW, PAD_T + plotH - expTop, 3)}" style="fill:${CHART_EXPENSE}"><title>${MONTH_NAMES[i]} ${year} expenses: ${fmt(t.expense)}</title></path>`;
+    labelsSvg += `<text x="${cx}" y="${H - 8}" text-anchor="middle" font-size="10" style="fill:var(--muted)">${MONTH_NAMES[i]}</text>`;
+  });
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${gridSvg}${barsSvg}${labelsSvg}
+    </svg>
+    <div class="chart-legend">
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:${CHART_INCOME}"></span>Income</div>
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:${CHART_EXPENSE}"></span>Expenses</div>
+    </div>
+  `;
 }
 
 // ===== RENDER HOME =====
@@ -1603,6 +1908,75 @@ function renderIncome() {
   ` : '<div class="empty"><div class="em-icon">💰</div><p>No income sources yet — tap "Add Income Stream" to create one</p></div>';
 }
 
+// ===== RENDER REPORTS =====
+let reportsYear = today().getFullYear();
+let reportsMonth = new Date(); reportsMonth.setDate(1);
+
+function changeReportsYear(dir) {
+  reportsYear += dir;
+  renderReports();
+}
+
+function changeReportsMonth(dir) {
+  reportsMonth.setMonth(reportsMonth.getMonth() + dir);
+  renderReports();
+}
+
+function renderReports() {
+  renderCashFlowChart();
+
+  document.getElementById('reports-year-label').textContent = String(reportsYear);
+  const yearTotals = getYearMonthlyTotals(reportsYear);
+  const yearIncome = yearTotals.reduce((s, t) => s + t.income, 0);
+  const yearExpense = yearTotals.reduce((s, t) => s + t.expense, 0);
+  const yearNet = yearIncome - yearExpense;
+  document.getElementById('reports-year-summary').innerHTML = `
+    <div class="summary-card"><div class="s-label">Income</div><div class="s-amount income">${fmt(yearIncome)}</div></div>
+    <div class="summary-card"><div class="s-label">Expenses</div><div class="s-amount expense">${fmt(yearExpense)}</div></div>
+    <div class="summary-card"><div class="s-label">Net</div><div class="s-amount net ${yearNet >= 0 ? 'pos' : 'neg'}">${yearNet >= 0 ? '+' : '-'}${fmt(Math.abs(yearNet))}</div></div>
+  `;
+  renderIncomeExpenseChart(reportsYear);
+
+  document.getElementById('reports-month-label').textContent =
+    reportsMonth.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+  renderCategoryBreakdown();
+}
+
+function renderCategoryBreakdown() {
+  const container = document.getElementById('cat-breakdown');
+  if (!container) return;
+
+  const y = reportsMonth.getFullYear(), m = reportsMonth.getMonth();
+  const from = new Date(y, m, 1), to = new Date(y, m + 1, 0);
+  const expenses = getEvents(from, to).filter(e => e.type === 'expense' && !e.isTransfer);
+
+  if (expenses.length === 0) {
+    container.innerHTML = '<div class="chart-empty">No expenses this month</div>';
+    return;
+  }
+
+  const totals = {};
+  for (const e of expenses) {
+    const cat = e.item.category || 'other';
+    totals[cat] = (totals[cat] || 0) + e.amount;
+  }
+  const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const maxAmt = Math.max(...rows.map(([, amt]) => amt));
+
+  container.innerHTML = rows.map(([cat, amt]) => `
+    <div class="cat-row">
+      <div class="cat-row-icon cat-${escapeHtml(cat)}">${CAT_ICON[cat] || '📦'}</div>
+      <div class="cat-row-body">
+        <div class="cat-row-top">
+          <span class="cat-row-name">${cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
+          <span class="cat-row-amt">${fmt(amt)}</span>
+        </div>
+        <div class="cat-row-bar"><div class="cat-row-bar-fill" style="width:${(amt / maxAmt * 100).toFixed(1)}%"></div></div>
+      </div>
+    </div>
+  `).join('');
+}
+
 // ===== RENDER SETTINGS =====
 function renderSettings() {
   document.getElementById('settings-accounts').innerHTML = data.accounts.map(a => `
@@ -1667,6 +2041,7 @@ function openPage(name) {
   if (name === 'home') renderHome();
   else if (name === 'expenses') renderExpenses();
   else if (name === 'income') renderIncome();
+  else if (name === 'reports') renderReports();
   else if (name === 'settings') renderSettings();
 }
 
@@ -1952,6 +2327,114 @@ function wizardSave() {
   showToast(`${wizardState.name} added!`);
 }
 
+// ===== QUICK TRANSACTION (one-off expense / income / transfer between accounts) =====
+let quickTxState = {};
+
+function openQuickTx() {
+  quickTxState = {
+    type: 'expense', name: '', amount: 0,
+    account: data.accounts[0]?.id,
+    fromAccount: data.accounts[0]?.id,
+    toAccount: (data.accounts[1] || data.accounts[0])?.id,
+    category: 'other', date: isoDate(today())
+  };
+  renderQuickTxPills();
+  renderQuickTxBody();
+  document.getElementById('quick-tx-overlay').classList.add('open');
+}
+
+function renderQuickTxPills() {
+  document.querySelectorAll('#qtx-type-pills .pill').forEach(p =>
+    p.classList.toggle('selected', p.dataset.type === quickTxState.type)
+  );
+}
+
+function setQuickTxType(t) {
+  quickTxState.type = t;
+  renderQuickTxPills();
+  renderQuickTxBody();
+}
+
+function renderQuickTxBody() {
+  const body = document.getElementById('quick-tx-body');
+  const s = quickTxState;
+  if (!data.accounts.length) {
+    body.innerHTML = `<p style="color:var(--muted);font-size:13px">Add an account in Settings first.</p>`;
+    return;
+  }
+  if (s.type === 'transfer') {
+    body.innerHTML = `
+      <div class="form-group"><label>From Account</label><select onchange="quickTxState.fromAccount=this.value">
+        ${data.accounts.map(a => `<option value="${escapeHtml(a.id)}" ${s.fromAccount===a.id?'selected':''}>${escapeHtml(a.name)}</option>`).join('')}
+      </select></div>
+      <div class="form-group"><label>To Account</label><select onchange="quickTxState.toAccount=this.value">
+        ${data.accounts.map(a => `<option value="${escapeHtml(a.id)}" ${s.toAccount===a.id?'selected':''}>${escapeHtml(a.name)}</option>`).join('')}
+      </select></div>
+      <div class="form-group"><label>Amount (CAD)</label>
+        <input type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${s.amount||''}" oninput="quickTxState.amount=parseFloat(this.value)||0">
+      </div>
+      <div class="form-group"><label>Date</label><input type="date" value="${escapeHtml(s.date)}" onchange="quickTxState.date=this.value"></div>
+      <div class="form-group"><label>Note (optional)</label>
+        <input type="text" placeholder="e.g. Move to savings" value="${escapeHtml(s.name)}" oninput="quickTxState.name=this.value">
+      </div>
+    `;
+  } else {
+    const catOpts = s.type === 'expense' ?
+      ['housing','utilities','insurance','education','debt','credit','other'].map(c =>
+        `<option value="${c}" ${s.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
+      ).join('') : '';
+    body.innerHTML = `
+      <div class="form-group"><label>Name</label>
+        <input type="text" placeholder="e.g. Grocery run" value="${escapeHtml(s.name)}" oninput="quickTxState.name=this.value">
+      </div>
+      <div class="form-group"><label>Amount (CAD)</label>
+        <input type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${s.amount||''}" oninput="quickTxState.amount=parseFloat(this.value)||0">
+      </div>
+      <div class="form-group"><label>Account</label><select onchange="quickTxState.account=this.value">
+        ${data.accounts.map(a => `<option value="${escapeHtml(a.id)}" ${s.account===a.id?'selected':''}>${escapeHtml(a.name)}</option>`).join('')}
+      </select></div>
+      ${s.type === 'expense' ? `<div class="form-group"><label>Category</label><select onchange="quickTxState.category=this.value">${catOpts}</select></div>` : ''}
+      <div class="form-group"><label>Date</label><input type="date" value="${escapeHtml(s.date)}" onchange="quickTxState.date=this.value"></div>
+    `;
+  }
+}
+
+function saveQuickTx() {
+  const s = quickTxState;
+  if (!data.accounts.length) return;
+
+  if (s.type === 'transfer') {
+    if (!s.fromAccount || !s.toAccount || s.fromAccount === s.toAccount) { showToast('Pick two different accounts'); return; }
+    if (!s.amount) { showToast('Enter an amount'); return; }
+    if (!data.transfers) data.transfers = [];
+    data.transfers.push({
+      id: 'xfer-' + Date.now(), date: s.date,
+      fromAccount: s.fromAccount, toAccount: s.toAccount,
+      amount: s.amount, note: s.name.trim(), active: true
+    });
+  } else {
+    if (!s.name.trim()) { showToast('Enter a name'); return; }
+    if (!s.amount) { showToast('Enter an amount'); return; }
+    const newItem = {
+      id: 'item-' + Date.now(), name: s.name.trim(), amount: s.amount,
+      account: s.account, recurrence: 'once', startDate: s.date, active: true
+    };
+    if (s.type === 'income') {
+      data.income.push(newItem);
+    } else {
+      newItem.category = s.category;
+      newItem.type = 'fixed';
+      newItem.overrides = {};
+      data.bills.push(newItem);
+    }
+  }
+
+  saveData();
+  closeModal('quick-tx-overlay');
+  renderCurrentPage();
+  showToast('Transaction added ✓');
+}
+
 // ===== MODALS =====
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
@@ -1995,7 +2478,7 @@ function importData(event) {
       imported.income = income;
       data = imported;
       saveData();
-      renderHome(); renderExpenses(); renderIncome(); renderSettings();
+      renderHome(); renderExpenses(); renderIncome(); renderReports(); renderSettings();
       showToast('Data imported!');
     } catch(err) { showToast('Import failed — invalid file'); }
   };
@@ -2007,7 +2490,7 @@ function resetConfirm() {
   if (!confirm('Reset all data to defaults? This cannot be undone.')) return;
   localStorage.removeItem('pf_data_v2');
   loadData();
-  renderHome(); renderExpenses(); renderIncome(); renderSettings();
+  renderHome(); renderExpenses(); renderIncome(); renderReports(); renderSettings();
   showToast('Reset to defaults');
 }
 
