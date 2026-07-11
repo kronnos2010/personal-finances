@@ -38,6 +38,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .account-card .acc-balance{font-size:22px;font-weight:700;letter-spacing:-0.5px}
 .account-card .acc-projected{font-size:11px;color:var(--muted);margin-top:2px}
 .timeline{padding:0 20px}
+.acct-section{margin-bottom:20px}
+.acct-section:last-child{margin-bottom:0}
+.acct-section-hdr{display:flex;align-items:baseline;justify-content:space-between;padding:4px 0 10px;border-bottom:2px solid var(--border);margin-bottom:2px;cursor:pointer}
+.acct-section-name{font-size:15px;font-weight:700}
+.acct-section-bal{font-size:14px;font-weight:600;color:var(--muted)}
+.acct-section-empty{padding:16px 0;color:var(--muted);font-size:13px}
 .tl-group{margin-bottom:4px}
 .tl-date-header{font-size:12px;font-weight:600;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 .tl-date-header .days-away{font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:20px}
@@ -1304,53 +1310,76 @@ function renderHome() {
   renderNeedsReview();
 
   const tl = document.getElementById('timeline');
-  if (events.length === 0) {
-    tl.innerHTML = '<div class="empty"><div class="em-icon">📅</div><p>No upcoming payments found</p></div>';
+  if (!data.accounts.length) {
+    tl.innerHTML = '<div class="empty"><div class="em-icon">🏦</div><p>Add an account in Settings to see cash flow</p></div>';
     return;
   }
 
-  const grouped = {};
-  for (const ev of events) {
-    const key = isoDate(ev.date);
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(ev);
+  // One section per account (instead of one merged list) — makes it clear which account each
+  // payment moves through, and each section's running balance starts from that account's own balance.
+  tl.innerHTML = data.accounts.map(acct => renderAccountTimeline(acct, events)).join('');
+}
+
+function renderAccountTimeline(acct, allEvents) {
+  const events = allEvents.filter(ev => ev.item.account === acct.id);
+
+  let body;
+  if (events.length === 0) {
+    body = '<div class="acct-section-empty">No upcoming activity</div>';
+  } else {
+    const grouped = {};
+    for (const ev of events) {
+      const key = isoDate(ev.date);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(ev);
+    }
+
+    let running = acct.balance;
+    body = Object.entries(grouped).map(([dateStr, evs]) => {
+      const d = parseDate(dateStr);
+      const netDay = evs.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
+      running += netDay;
+      const balColor = running < 0 ? 'var(--expense)' : running < 500 ? 'var(--warn)' : 'var(--income)';
+      const items = evs.map(ev => {
+        const est = ev.estimated;
+        const dotCls = est ? 'estimated' : ev.type;
+        const amtCls = est ? 'estimated' : ev.type;
+        const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
+        const rowCls = est ? ' estimated-row' : '';
+        const click = est ? `onclick="openConfirmModal('${ev.type === 'income' ? 'income' : 'bill'}','${ev.item.id}','${ev.monthKey}')"` : '';
+        return `
+        <div class="tl-item${rowCls}" ${click}>
+          <div class="tl-dot ${dotCls}"></div>
+          <div class="tl-info">
+            <div class="tl-name">${escapeHtml(ev.item.name)}</div>
+            ${est ? '<div class="tl-acct"><span class="est-label">est.</span></div>' : ''}
+          </div>
+          <div>
+            <div class="tl-amount ${amtCls}">${prefix}${fmt(ev.amount)}</div>
+          </div>
+        </div>`;
+      }).join('');
+      return `
+        <div class="tl-group">
+          <div class="tl-date-header">
+            <span>${fmtDate(d)}</span>
+            <span class="days-away" style="color:${balColor}">${fmt(running)}</span>
+          </div>
+          ${items}
+        </div>
+      `;
+    }).join('');
   }
 
-  let running = totalBalance;
-  tl.innerHTML = Object.entries(grouped).map(([dateStr, evs]) => {
-    const d = parseDate(dateStr);
-    const netDay = evs.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
-    running += netDay;
-    const balColor = running < 0 ? 'var(--expense)' : running < 500 ? 'var(--warn)' : 'var(--income)';
-    const items = evs.map(ev => {
-      const est = ev.estimated;
-      const dotCls = est ? 'estimated' : ev.type;
-      const amtCls = est ? 'estimated' : ev.type;
-      const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
-      const rowCls = est ? ' estimated-row' : '';
-      const click = est ? `onclick="openConfirmModal('${ev.type === 'income' ? 'income' : 'bill'}','${ev.item.id}','${ev.monthKey}')"` : '';
-      return `
-      <div class="tl-item${rowCls}" ${click}>
-        <div class="tl-dot ${dotCls}"></div>
-        <div class="tl-info">
-          <div class="tl-name">${escapeHtml(ev.item.name)}</div>
-          <div class="tl-acct">${escapeHtml(getAccount(ev.item.account).name)}${est ? ' <span class="est-label">· est.</span>' : ''}</div>
-        </div>
-        <div>
-          <div class="tl-amount ${amtCls}">${prefix}${fmt(ev.amount)}</div>
-        </div>
-      </div>`;
-    }).join('');
-    return `
-      <div class="tl-group">
-        <div class="tl-date-header">
-          <span>${fmtDate(d)}</span>
-          <span class="days-away" style="color:${balColor}">${fmt(running)}</span>
-        </div>
-        ${items}
+  return `
+    <div class="acct-section">
+      <div class="acct-section-hdr" onclick="editAccount('${acct.id}')">
+        <span class="acct-section-name">${escapeHtml(acct.name)}</span>
+        <span class="acct-section-bal">${fmt(acct.balance)}</span>
       </div>
-    `;
-  }).join('');
+      ${body}
+    </div>
+  `;
 }
 
 // ===== NEEDS REVIEW =====
