@@ -1098,6 +1098,12 @@ function occKeyLabel(key) {
 // Returns [{date, amount, estimated, overridden, monthKey}]
 // estimated=true means variable with no confirmed override (shown amber, uses the average)
 // overridden=true means a manual per-month override is applied (any bill type, e.g. adjusted from the payment history view)
+// A day-of-month value is either a number 1-31 or the string 'last' (always the actual last day of that month).
+function resolveActualDay(dayValue, y, m) {
+  if (dayValue === 'last') return lastDayOfMonth(y, m);
+  return Math.min(dayValue || 1, lastDayOfMonth(y, m));
+}
+
 function getOccurrences(item, fromDate, toDate) {
   const from = new Date(fromDate); from.setHours(0,0,0,0);
   const to = new Date(toDate); to.setHours(23,59,59,999);
@@ -1140,7 +1146,7 @@ function getOccurrences(item, fromDate, toDate) {
         const ov = (item.overrides || {})[mk];
         const applied = !!(ov && ov.confirmed);
         const effDay = (applied && ov.dayOfMonth) ? ov.dayOfMonth : dom;
-        const actualDay = Math.min(effDay, lastDayOfMonth(y, m));
+        const actualDay = resolveActualDay(effDay, y, m);
         const d = new Date(y, m, actualDay);
         if (d > to) break;
         if (d >= from) results.push({
@@ -1154,6 +1160,37 @@ function getOccurrences(item, fromDate, toDate) {
       }
       break;
     }
+    // Every other month (e.g. a water bill billed 6x/year) — anchored to startDate so the app knows
+    // which alternating set of months to use (e.g. Jan/Mar/May... vs Feb/Apr/Jun...). Since it has at
+    // most one occurrence per calendar month, it's keyed by 'YYYY-MM' just like 'monthly'.
+    case 'bimonthly': {
+      const dom = item.dayOfMonth || 1;
+      const anchor = parseDate(item.startDate);
+      const anchorIdx = anchor.getFullYear() * 12 + anchor.getMonth();
+      let y = from.getFullYear(), m = from.getMonth();
+      if (m === 0) { y--; m = 11; } else m--;
+      for (let i = 0; i < 24; i++) {
+        const monthIdx = y * 12 + m;
+        if (((monthIdx - anchorIdx) % 2 + 2) % 2 === 0) {
+          const mk = `${y}-${String(m+1).padStart(2,'0')}`;
+          const ov = (item.overrides || {})[mk];
+          const applied = !!(ov && ov.confirmed);
+          const effDay = (applied && ov.dayOfMonth) ? ov.dayOfMonth : dom;
+          const actualDay = resolveActualDay(effDay, y, m);
+          const d = new Date(y, m, actualDay);
+          if (d > to) break;
+          if (d >= from) results.push({
+            date: d,
+            amount: (applied && ov.amount) ? ov.amount : item.amount,
+            estimated: isVar && !applied,
+            overridden: applied,
+            monthKey: mk
+          });
+        }
+        m++; if (m > 11) { m = 0; y++; }
+      }
+      break;
+    }
     case 'twicemonthly': {
       // Keyed by exact date (not month) — a month has two occurrences that must be independently overridable.
       const days = item.daysOfMonth || [1, 15];
@@ -1161,7 +1198,7 @@ function getOccurrences(item, fromDate, toDate) {
       if (m === 0) { y--; m = 11; } else m--;
       for (let i = 0; i < 24; i++) {
         for (const dom of days) {
-          const actualDay = Math.min(dom, lastDayOfMonth(y, m));
+          const actualDay = resolveActualDay(dom, y, m);
           const d = new Date(y, m, actualDay);
           if (d > to) break;
           if (d >= from) results.push(mkOcc(d, isoDate(d)));
@@ -1219,9 +1256,16 @@ const BILL_GROUPS = [
 
 // A <select> of 1-31 avoids the mobile number keyboard entirely for day-of-month fields
 function dayOptionsHTML(selected) {
-  let h = '';
+  let h = `<option value="last" ${selected === 'last' ? 'selected' : ''}>Last day of month</option>`;
   for (let d = 1; d <= 31; d++) h += `<option value="${d}" ${d === selected ? 'selected' : ''}>${d}</option>`;
   return h;
+}
+// A <select>'s .value is always a string — 'last' stays as-is, everything else is parsed as a day number.
+// Returns null (not a fallback) so callers can tell "leave the existing value alone" apart from "user picked last/a day".
+function parseDayValue(val) {
+  if (val === 'last') return 'last';
+  const n = parseInt(val);
+  return isNaN(n) ? null : n;
 }
 
 // ===== RENDER HOME =====
@@ -1375,7 +1419,8 @@ function saveConfirmedVar() {
   // (e.g. a bill waived for a month, or a week with no paycheck) and keep the old amount instead.
   const parsedAmount = parseFloat(document.getElementById('cv-amount').value);
   const amount = isNaN(parsedAmount) ? item.amount : parsedAmount;
-  const dayOfMonth = parseInt(document.getElementById('cv-day').value) || item.dayOfMonth;
+  const parsedDay = parseDayValue(document.getElementById('cv-day').value);
+  const dayOfMonth = parsedDay !== null ? parsedDay : item.dayOfMonth;
   item.overrides[monthKey] = { amount, dayOfMonth, confirmed: true };
   saveData();
   closeModal('confirm-var-overlay');
@@ -1566,6 +1611,7 @@ function recurrenceLabel(item) {
     case 'weekly': return 'Weekly';
     case 'biweekly': return 'Bi-weekly';
     case 'monthly': return `Monthly (${ordinal(item.dayOfMonth)})`;
+    case 'bimonthly': return `Every other month (${ordinal(item.dayOfMonth)})`;
     case 'twicemonthly': return `Twice/month (${(item.daysOfMonth||[]).map(ordinal).join(' & ')})`;
     case 'once': return 'One time';
     default: return escapeHtml(item.recurrence);
@@ -1573,6 +1619,7 @@ function recurrenceLabel(item) {
 }
 
 function ordinal(n) {
+  if (n === 'last') return 'last day';
   if (!n) return '?';
   const s = ['th','st','nd','rd'], v = n % 100;
   return n + (s[(v-20)%10]||s[v]||s[0]);
@@ -1664,6 +1711,7 @@ function editItem(type, id) {
         <option value="weekly" ${item.recurrence==='weekly'?'selected':''}>Weekly</option>
         <option value="biweekly" ${item.recurrence==='biweekly'?'selected':''}>Bi-weekly</option>
         <option value="monthly" ${item.recurrence==='monthly'?'selected':''}>Monthly</option>
+        <option value="bimonthly" ${item.recurrence==='bimonthly'?'selected':''}>Every other month</option>
         <option value="twicemonthly" ${item.recurrence==='twicemonthly'?'selected':''}>Twice a month</option>
         <option value="once" ${item.recurrence==='once'?'selected':''}>One time</option>
       </select></div>
@@ -1704,8 +1752,8 @@ function saveItem() {
     item.type = document.getElementById('ei-variable')?.checked ? 'variable' : 'fixed';
     if (!item.overrides) item.overrides = {};
   }
-  const dom = parseInt(document.getElementById('ei-dayofmonth').value);
-  if (!isNaN(dom)) item.dayOfMonth = dom;
+  const dom = parseDayValue(document.getElementById('ei-dayofmonth').value);
+  if (dom !== null) item.dayOfMonth = dom;
   const sd = document.getElementById('ei-startdate').value;
   if (sd) item.startDate = sd;
   item.active = document.getElementById('ei-active').checked;
@@ -1782,7 +1830,7 @@ function renderWizardStep() {
     body.innerHTML = `
       <div class="form-group"><label>How often?</label>
         <div class="pills">
-          ${[['once','One time'],['weekly','Weekly'],['biweekly','Bi-weekly'],['monthly','Monthly'],['twicemonthly','Twice/month']].map(([v,l]) =>
+          ${[['once','One time'],['weekly','Weekly'],['biweekly','Bi-weekly'],['monthly','Monthly'],['bimonthly','Every other month'],['twicemonthly','Twice/month']].map(([v,l]) =>
             `<div class="pill ${wizardState.recurrence===v?'selected':''}" onclick="setWizardRec('${v}')">${l}</div>`
           ).join('')}
         </div>
@@ -1827,14 +1875,21 @@ function renderWizardScheduleFields() {
     </div>`;
   } else if (r === 'monthly') {
     c.innerHTML = `<div class="form-group"><label>Day of Month</label>
-      <select onchange="wizardState.dayOfMonth=parseInt(this.value)||1">${dayOptionsHTML(wizardState.dayOfMonth)}</select>
+      <select onchange="wizardState.dayOfMonth=parseDayValue(this.value)">${dayOptionsHTML(wizardState.dayOfMonth)}</select>
+    </div>`;
+  } else if (r === 'bimonthly') {
+    c.innerHTML = `<div class="form-group"><label>Day of Month</label>
+      <select onchange="wizardState.dayOfMonth=parseDayValue(this.value)">${dayOptionsHTML(wizardState.dayOfMonth)}</select>
+    </div>
+    <div class="form-group"><label>First Payment Month</label>
+      <input type="month" value="${escapeHtml((wizardState.startDate||'').slice(0,7))}" onchange="wizardState.startDate=this.value+'-01'">
     </div>`;
   } else if (r === 'twicemonthly') {
     c.innerHTML = `<div class="form-group"><label>First Day</label>
-      <select onchange="wizardState.daysOfMonth[0]=parseInt(this.value)||1">${dayOptionsHTML(wizardState.daysOfMonth[0])}</select>
+      <select onchange="wizardState.daysOfMonth[0]=parseDayValue(this.value)">${dayOptionsHTML(wizardState.daysOfMonth[0])}</select>
     </div>
     <div class="form-group"><label>Second Day</label>
-      <select onchange="wizardState.daysOfMonth[1]=parseInt(this.value)||15">${dayOptionsHTML(wizardState.daysOfMonth[1])}</select>
+      <select onchange="wizardState.daysOfMonth[1]=parseDayValue(this.value)">${dayOptionsHTML(wizardState.daysOfMonth[1])}</select>
     </div>`;
   }
 }
