@@ -1135,12 +1135,35 @@ function renderCurrentPage() {
 }
 
 // ===== STORAGE =====
+// Recovers items whose `account` doesn't match any real account id — most commonly an income/bill
+// created via the wizard while data.accounts was empty, whose `account` came out `undefined` and was
+// silently dropped by JSON.stringify (no error, nothing visibly wrong in the edit screen afterward).
+// Left alone, such an item vanishes from every account's Cash Flow section and never offsets that
+// account's running balance. Re-attaching it to the first account is a guess, not a guarantee it's the
+// *right* account, so this always surfaces a toast naming the repaired items for the user to verify.
+function repairOrphanedAccounts() {
+  if (!data.accounts || !data.accounts.length) return;
+  const validIds = new Set(data.accounts.map(a => a.id));
+  const fixed = [];
+  for (const item of [...(data.income || []), ...(data.bills || [])]) {
+    if (!validIds.has(item.account)) {
+      item.account = data.accounts[0].id;
+      fixed.push(item.name);
+    }
+  }
+  if (fixed.length) {
+    showToast(`Fixed missing account on: ${fixed.join(', ')} — please verify in the edit screen`);
+    saveData();
+  }
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem('pf_data_v2');
     data = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_DATA));
     if (!data.lastModified) data.lastModified = 0;
     if (!Array.isArray(data.transfers)) data.transfers = []; // older saved data predates transfers
+    repairOrphanedAccounts();
   } catch(e) {
     data = JSON.parse(JSON.stringify(DEFAULT_DATA));
   }
@@ -2306,6 +2329,7 @@ function wizardNext() {
 function wizardBack() { wizardState.step--; renderWizardStep(); }
 
 function wizardSave() {
+  if (!wizardState.account) { showToast('Add an account in Settings first'); return; }
   const id = 'item-' + Date.now();
   const newItem = {
     id, name: wizardState.name, amount: wizardState.amount,
@@ -2477,6 +2501,8 @@ function importData(event) {
       }
       imported.income = income;
       data = imported;
+      if (!Array.isArray(data.transfers)) data.transfers = [];
+      repairOrphanedAccounts();
       saveData();
       renderHome(); renderExpenses(); renderIncome(); renderReports(); renderSettings();
       showToast('Data imported!');
