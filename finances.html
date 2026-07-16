@@ -591,6 +591,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   </div>
 </div>
 
+<!-- UPDATE AMOUNT MODAL (schedule a new rate from a given date forward — e.g. a raise) -->
+<div class="modal-overlay" id="raise-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="raise-title">Update Amount</h2>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:20px">Changes the amount for this date and every occurrence after it — past occurrences are untouched.</div>
+    <div class="edit-fields">
+      <div class="form-group"><label>New Amount (CAD)</label><input id="raise-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Effective From</label><input id="raise-date" type="date"></div>
+    </div>
+    <div id="raise-upcoming" style="margin-bottom:8px"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('raise-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRaise()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- EXPENSE HISTORY MODAL -->
 <div class="modal-overlay" id="expense-history-overlay">
   <div class="modal">
@@ -1224,6 +1242,21 @@ function resolveActualDay(dayValue, y, m) {
   return Math.min(dayValue || 1, lastDayOfMonth(y, m));
 }
 
+// Resolves the base rate for an occurrence on `date`, before any single-date override is applied.
+// `item.amountSchedule` is an optional array of {effectiveDate, amount} — a "raise" (or pay cut) that
+// applies to every occurrence from effectiveDate forward, without needing to touch each occurrence
+// individually (that's what per-date `overrides` are for). Falls back to `item.amount` when the item
+// has no schedule yet (every item created before this feature, and any without a scheduled change).
+function getEffectiveAmount(item, date) {
+  const sched = item.amountSchedule;
+  if (!sched || !sched.length) return item.amount;
+  let amt = item.amount;
+  for (const s of sched) {
+    if (parseDate(s.effectiveDate) <= date) amt = s.amount; else break;
+  }
+  return amt;
+}
+
 function getOccurrences(item, fromDate, toDate) {
   const from = new Date(fromDate); from.setHours(0,0,0,0);
   const to = new Date(toDate); to.setHours(23,59,59,999);
@@ -1236,7 +1269,7 @@ function getOccurrences(item, fromDate, toDate) {
     const applied = !!(ov && ov.confirmed && ov.amount);
     return {
       date: new Date(d),
-      amount: applied ? ov.amount : item.amount,
+      amount: applied ? ov.amount : getEffectiveAmount(item, d),
       estimated: isVar && !applied,
       overridden: applied,
       monthKey: mk
@@ -1271,7 +1304,7 @@ function getOccurrences(item, fromDate, toDate) {
         if (d > to) break;
         if (d >= from) results.push({
           date: d,
-          amount: (applied && ov.amount) ? ov.amount : item.amount,
+          amount: (applied && ov.amount) ? ov.amount : getEffectiveAmount(item, d),
           estimated: isVar && !applied,
           overridden: applied,
           monthKey: mk
@@ -1301,7 +1334,7 @@ function getOccurrences(item, fromDate, toDate) {
           if (d > to) break;
           if (d >= from) results.push({
             date: d,
-            amount: (applied && ov.amount) ? ov.amount : item.amount,
+            amount: (applied && ov.amount) ? ov.amount : getEffectiveAmount(item, d),
             estimated: isVar && !applied,
             overridden: applied,
             monthKey: mk
@@ -1915,18 +1948,26 @@ function renderIncome() {
 
   document.getElementById('income-list').innerHTML = data.income.length ? `
     <div class="settings-section">
-      ${data.income.map(item => `
+      ${data.income.map(item => {
+        const current = getEffectiveAmount(item, t);
+        const future = (item.amountSchedule || [])
+          .filter(s => parseDate(s.effectiveDate) > t)
+          .sort((a, b) => parseDate(a.effectiveDate) - parseDate(b.effectiveDate))[0];
+        const nextNote = future ? ` · next: ${fmt(future.amount)} from ${fmtDateShort(parseDate(future.effectiveDate))}` : '';
+        return `
         <div class="settings-row" onclick="openExpenseHistory('income','${item.id}')">
           <div class="sr-left">
             <div class="sr-title">${escapeHtml(item.name)}</div>
-            <div class="sr-sub">${fmt(item.amount)} · ${recurrenceLabel(item)} · ${escapeHtml(getAccount(item.account).name)}</div>
+            <div class="sr-sub">${fmt(current)} · ${recurrenceLabel(item)} · ${escapeHtml(getAccount(item.account).name)}${nextNote}</div>
           </div>
           <div class="sr-right" style="color:${item.active ? 'var(--income)' : 'var(--muted)'}">
+            <button class="sr-history-btn" title="Update Amount" onclick="event.stopPropagation();openRaiseModal('${item.id}')">📈</button>
             <button class="sr-history-btn" title="Edit" onclick="event.stopPropagation();editItem('income','${item.id}')">✏️</button>
             ${item.active ? '●' : '○'} ›
           </div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
   ` : '<div class="empty"><div class="em-icon">💰</div><p>No income sources yet — tap "Add Income Stream" to create one</p></div>';
 }
@@ -2200,6 +2241,72 @@ function deleteItem() {
   closeModal('edit-item-overlay');
   renderCurrentPage();
   showToast('Deleted');
+}
+
+// ===== UPDATE AMOUNT (schedule a rate change from a date forward, e.g. a raise) =====
+// Distinct from editItem() (which changes the rate for the item's entire history, past included)
+// and from the per-occurrence override in Payment History (which only ever touches one date).
+let raiseItemId = null;
+
+function openRaiseModal(itemId) {
+  const item = data.income.find(i => i.id === itemId);
+  if (!item) return;
+  raiseItemId = itemId;
+  document.getElementById('raise-title').textContent = `Update Amount — ${item.name}`;
+  document.getElementById('raise-amount').value = getEffectiveAmount(item, today());
+  document.getElementById('raise-date').value = isoDate(today());
+  renderRaiseUpcoming(item);
+  document.getElementById('raise-overlay').classList.add('open');
+}
+
+function renderRaiseUpcoming(item) {
+  const wrap = document.getElementById('raise-upcoming');
+  const sched = (item.amountSchedule || []).slice().sort((a, b) => parseDate(a.effectiveDate) - parseDate(b.effectiveDate));
+  if (!sched.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Scheduled changes</div>
+    <div class="budget-list" style="padding:0">
+      ${sched.map(s => `
+        <div class="budget-item">
+          <div class="bi-info">
+            <div class="bi-name">${fmt(s.amount)}</div>
+            <div class="bi-sub">from ${fmtDateShort(parseDate(s.effectiveDate))}</div>
+          </div>
+          <button class="sr-history-btn" title="Remove" onclick="deleteRaiseEntry('${s.effectiveDate}')">🗑️</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function saveRaise() {
+  const item = data.income.find(i => i.id === raiseItemId);
+  if (!item) return;
+  const amount = parseFloat(document.getElementById('raise-amount').value);
+  const effectiveDate = document.getElementById('raise-date').value;
+  if (isNaN(amount)) { showToast('Enter a valid amount'); return; }
+  if (!effectiveDate) { showToast('Pick an effective date'); return; }
+  if (!item.amountSchedule) item.amountSchedule = [];
+  const existing = item.amountSchedule.find(s => s.effectiveDate === effectiveDate);
+  if (existing) existing.amount = amount;
+  else item.amountSchedule.push({ effectiveDate, amount });
+  item.amountSchedule.sort((a, b) => parseDate(a.effectiveDate) - parseDate(b.effectiveDate));
+  saveData();
+  closeModal('raise-overlay');
+  renderCurrentPage();
+  refreshExpenseHistoryIfOpen();
+  showToast(`Amount will be ${fmt(amount)} from ${fmtDateShort(parseDate(effectiveDate))} on`);
+}
+
+function deleteRaiseEntry(effectiveDate) {
+  const item = data.income.find(i => i.id === raiseItemId);
+  if (!item || !item.amountSchedule) return;
+  item.amountSchedule = item.amountSchedule.filter(s => s.effectiveDate !== effectiveDate);
+  saveData();
+  renderRaiseUpcoming(item);
+  renderCurrentPage();
+  refreshExpenseHistoryIfOpen();
+  showToast('Removed');
 }
 
 // ===== WIZARD =====
