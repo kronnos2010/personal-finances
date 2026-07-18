@@ -84,6 +84,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .month-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 20px}
 .month-nav h2{font-size:17px;font-weight:700}
 .month-nav button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+.month-nav .btn-today{font-size:12px;padding:4px 10px;color:var(--accent,var(--income));border-color:var(--income)}
 .summary-row{display:flex;gap:10px;padding:8px 20px}
 .summary-card{flex:1;background:var(--surface);border-radius:var(--radius);padding:12px;border:1px solid var(--border);text-align:center}
 .summary-card .s-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
@@ -161,6 +162,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .tl-amount.estimated{color:var(--warn)}
 .tl-item.estimated-row{cursor:pointer}
 .tl-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:10px 4px}
+.tl-item.clickable-row{cursor:pointer}
+.tl-item.clickable-row:hover{background:var(--surface-hover,rgba(255,255,255,.05));border-radius:8px;margin:0 -4px;padding:10px 4px}
 .est-label{font-size:10px;color:var(--warn);font-weight:600;letter-spacing:.3px}
 .budget-item.estimated-row{cursor:pointer}
 .budget-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:12px 4px}
@@ -404,8 +407,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       </div>
       <div class="home-panel home-panel-right">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Upcoming</span>
+          <span>Cash Flow</span>
           <span style="font-size:12px;color:var(--muted);padding-right:20px" id="combined-balance"></span>
+        </div>
+        <div class="month-nav">
+          <button onclick="changeHomeMonth(-1)">&#8249;</button>
+          <h2 id="home-month-label" style="font-size:16px"></h2>
+          <button onclick="changeHomeMonth(1)">&#8250;</button>
+          <button class="btn-today" id="home-today-btn" onclick="jumpHomeToday()" style="display:none">Today</button>
         </div>
         <div id="needs-review-wrap" class="needs-review-wrap" style="display:none"></div>
         <div class="timeline" id="timeline"></div>
@@ -1175,12 +1184,21 @@ function repairOrphanedAccounts() {
   }
 }
 
+// Accounts saved before balanceDate existed have no anchor to roll forward from — best effort is to
+// anchor them "as of today", which is exactly true right now and simply starts advancing from here.
+function repairMissingBalanceDates() {
+  for (const a of (data.accounts || [])) {
+    if (!a.balanceDate) a.balanceDate = isoDate(today());
+  }
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem('pf_data_v2');
     data = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_DATA));
     if (!data.lastModified) data.lastModified = 0;
     if (!Array.isArray(data.transfers)) data.transfers = []; // older saved data predates transfers
+    repairMissingBalanceDates();
     repairOrphanedAccounts();
   } catch(e) {
     data = JSON.parse(JSON.stringify(DEFAULT_DATA));
@@ -1401,6 +1419,25 @@ function getEvents(from, to) {
   return events;
 }
 
+// An account's stored `balance` is only accurate as of `balanceDate` (stamped whenever it's entered in
+// Settings) — it doesn't advance on its own as scheduled bills/income pass their date. This rolls it
+// forward (or backward, if asked for a date before the anchor) through every event that's happened
+// since, so "current balance" reflects today without the user re-entering it after every payday/bill.
+function getAccountBalanceAsOf(acct, date) {
+  const anchor = parseDate(acct.balanceDate || isoDate(today()));
+  const d = new Date(date); d.setHours(0, 0, 0, 0);
+  if (isoDate(d) === isoDate(anchor)) return acct.balance;
+  const forward = d > anchor;
+  const lo = forward ? anchor : d;
+  const hi = forward ? d : anchor;
+  const events = getEvents(lo, hi).filter(ev => ev.item.account === acct.id && ev.date > lo && ev.date <= hi);
+  const net = events.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
+  return forward ? acct.balance + net : acct.balance - net;
+}
+function getCurrentBalance(acct) {
+  return getAccountBalanceAsOf(acct, today());
+}
+
 // ===== FORMATTING =====
 function fmt(n) {
   return '$' + Math.abs(n).toLocaleString('en-CA', {minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1489,7 +1526,7 @@ function getForecastSeries(months) {
   const t = today();
   const to = new Date(t.getFullYear(), t.getMonth() + months, t.getDate());
   const events = getEvents(t, to);
-  const startBalance = data.accounts.reduce((s, a) => s + a.balance, 0);
+  const startBalance = data.accounts.reduce((s, a) => s + getCurrentBalance(a), 0);
   const byDate = {};
   for (const ev of events) {
     const key = isoDate(ev.date);
@@ -1636,6 +1673,29 @@ function renderIncomeExpenseChart(year) {
 }
 
 // ===== RENDER HOME =====
+// The Cash Flow timeline browses one calendar month at a time (independent of "today") so past
+// months — and their transactions — stay reachable for review/correction, not just future ones.
+let homeMonth = null;
+
+function changeHomeMonth(dir) {
+  if (!homeMonth) homeMonth = new Date(today().getFullYear(), today().getMonth(), 1);
+  homeMonth.setMonth(homeMonth.getMonth() + dir);
+  renderHome();
+}
+
+function jumpHomeToday() {
+  homeMonth = new Date(today().getFullYear(), today().getMonth(), 1);
+  renderHome();
+}
+
+// Scrolls the page down to one account's own section instead of opening the edit-account modal —
+// tapping a summary card is "show me this account's transactions", not "let me rename this account"
+// (that's still reachable via the ✏️ on the card, or by tapping the section header below).
+function focusAccountSection(id) {
+  const el = document.getElementById('acct-section-' + id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function renderHome() {
   const t = today();
   const dateStr = t.toLocaleDateString('en-CA', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -1643,24 +1703,41 @@ function renderHome() {
   const sd = document.getElementById('sidebar-date');
   if (sd) sd.textContent = dateStr;
 
-  const to90 = new Date(t.getFullYear(), 11, 31);
-  const events = getEvents(t, to90);
+  if (!homeMonth) homeMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+  const monthStart = new Date(homeMonth.getFullYear(), homeMonth.getMonth(), 1);
+  const monthEnd = new Date(homeMonth.getFullYear(), homeMonth.getMonth() + 1, 0);
+  const dayBeforeMonth = new Date(homeMonth.getFullYear(), homeMonth.getMonth(), 0);
+  const isCurrentMonth = monthStart.getFullYear() === t.getFullYear() && monthStart.getMonth() === t.getMonth();
+
+  document.getElementById('home-month-label').textContent = monthStart.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+  document.getElementById('home-today-btn').style.display = isCurrentMonth ? 'none' : '';
+
+  const events = getEvents(monthStart, monthEnd);
+
+  // Cards up top always reflect the real current balance / 30-day outlook as of today, regardless of
+  // which month is being browsed below — the two are independent views (current state vs. history/plan).
   const to30 = new Date(t); to30.setDate(to30.getDate() + 30);
-  const projMap = {};
-  for (const a of data.accounts) projMap[a.id] = a.balance;
+  const currentMap = {}, projMap = {};
+  for (const a of data.accounts) {
+    currentMap[a.id] = getCurrentBalance(a);
+    projMap[a.id] = currentMap[a.id];
+  }
   for (const ev of getEvents(t, to30)) {
     const aid = ev.item.account;
     if (projMap[aid] !== undefined)
       projMap[aid] += ev.type === 'income' ? ev.amount : -ev.amount;
   }
 
-  const totalBalance = data.accounts.reduce((s, a) => s + a.balance, 0);
+  const totalBalance = data.accounts.reduce((s, a) => s + currentMap[a.id], 0);
 
   document.getElementById('accounts-list').innerHTML = data.accounts.map(a => `
-    <div class="account-card" onclick="editAccount('${a.id}')">
-      <div class="acc-name">${escapeHtml(a.name)}</div>
-      <div class="acc-balance">${fmt(a.balance)}</div>
-      <div class="acc-projected" style="color:${projMap[a.id] >= a.balance ? 'var(--income)' : 'var(--expense)'}">
+    <div class="account-card" onclick="focusAccountSection('${a.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="acc-name">${escapeHtml(a.name)}</div>
+        <button class="sr-history-btn" title="Edit account" onclick="event.stopPropagation();editAccount('${a.id}')">✏️</button>
+      </div>
+      <div class="acc-balance">${fmt(currentMap[a.id])}</div>
+      <div class="acc-projected" style="color:${projMap[a.id] >= currentMap[a.id] ? 'var(--income)' : 'var(--expense)'}">
         30d: ${fmt(projMap[a.id])}
       </div>
     </div>
@@ -1677,16 +1754,19 @@ function renderHome() {
   }
 
   // One section per account (instead of one merged list) — makes it clear which account each
-  // payment moves through, and each section's running balance starts from that account's own balance.
-  tl.innerHTML = data.accounts.map(acct => renderAccountTimeline(acct, events)).join('');
+  // payment moves through, and each section's running balance starts from that account's own balance
+  // as of the day before the browsed month, not its all-time current balance.
+  tl.innerHTML = data.accounts.map(acct =>
+    renderAccountTimeline(acct, events, getAccountBalanceAsOf(acct, dayBeforeMonth), currentMap[acct.id])
+  ).join('');
 }
 
-function renderAccountTimeline(acct, allEvents) {
+function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance) {
   const events = allEvents.filter(ev => ev.item.account === acct.id);
 
   let body;
   if (events.length === 0) {
-    body = '<div class="acct-section-empty">No upcoming activity</div>';
+    body = '<div class="acct-section-empty">No activity this month</div>';
   } else {
     const grouped = {};
     for (const ev of events) {
@@ -1695,7 +1775,7 @@ function renderAccountTimeline(acct, allEvents) {
       grouped[key].push(ev);
     }
 
-    let running = acct.balance;
+    let running = seedBalance;
     body = Object.entries(grouped).map(([dateStr, evs]) => {
       const d = parseDate(dateStr);
       const netDay = evs.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
@@ -1706,8 +1786,10 @@ function renderAccountTimeline(acct, allEvents) {
         const dotCls = est ? 'estimated' : ev.type;
         const amtCls = est ? 'estimated' : ev.type;
         const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
-        const rowCls = est ? ' estimated-row' : '';
-        const click = est ? `onclick="openConfirmModal('${ev.type === 'income' ? 'income' : 'bill'}','${ev.item.id}','${ev.monthKey}')"` : '';
+        const rowCls = est ? ' estimated-row' : ' clickable-row';
+        // Every row is adjustable here now (not just unconfirmed/variable ones) — matches Payment
+        // History, and is what actually lets a past transaction be corrected from the Cash Flow view.
+        const click = `onclick="openConfirmModal('${ev.type === 'income' ? 'income' : 'bill'}','${ev.item.id}','${ev.monthKey}')"`;
         return `
         <div class="tl-item${rowCls}" ${click}>
           <div class="tl-dot ${dotCls}"></div>
@@ -1733,10 +1815,10 @@ function renderAccountTimeline(acct, allEvents) {
   }
 
   return `
-    <div class="acct-section">
+    <div class="acct-section" id="acct-section-${acct.id}">
       <div class="acct-section-hdr" onclick="editAccount('${acct.id}')">
         <span class="acct-section-name">${escapeHtml(acct.name)}</span>
-        <span class="acct-section-bal">${fmt(acct.balance)}</span>
+        <span class="acct-section-bal">${fmt(currentBalance)}</span>
       </div>
       ${body}
     </div>
@@ -2047,9 +2129,9 @@ function renderSettings() {
     <div class="settings-row" onclick="editAccount('${a.id}')">
       <div class="sr-left">
         <div class="sr-title">${escapeHtml(a.name)}</div>
-        <div class="sr-sub">Balance: ${fmt(a.balance)}</div>
+        <div class="sr-sub">Last set: ${fmt(a.balance)} on ${fmtDateShort(parseDate(a.balanceDate || isoDate(today())))}</div>
       </div>
-      <div class="sr-right">${fmt(a.balance)} ›</div>
+      <div class="sr-right">${fmt(getCurrentBalance(a))} ›</div>
     </div>
   `).join('');
 
@@ -2138,7 +2220,7 @@ function saveAccount() {
 
   if (editAccountId === null) {
     if (!name) { showToast('Enter an account name'); return; }
-    data.accounts.push({ id: 'acct-' + Date.now(), name, balance });
+    data.accounts.push({ id: 'acct-' + Date.now(), name, balance, balanceDate: isoDate(today()) });
     saveData();
     closeModal('edit-account-overlay');
     renderCurrentPage();
@@ -2150,6 +2232,9 @@ function saveAccount() {
   if (!a) return;
   a.name = name || a.name;
   a.balance = balance;
+  // Whenever a balance is (re)entered, it's a fresh snapshot as of right now — re-anchoring balanceDate
+  // here is what lets getCurrentBalance() keep advancing on its own afterward instead of going stale.
+  a.balanceDate = isoDate(today());
   saveData();
   closeModal('edit-account-overlay');
   renderCurrentPage();
@@ -2609,6 +2694,7 @@ function importData(event) {
       imported.income = income;
       data = imported;
       if (!Array.isArray(data.transfers)) data.transfers = [];
+      repairMissingBalanceDates();
       repairOrphanedAccounts();
       saveData();
       renderHome(); renderExpenses(); renderIncome(); renderReports(); renderSettings();
