@@ -35,13 +35,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .page-add-btn:hover{opacity:.9}
 .card{background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--border)}
 .section-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:16px 20px 8px}
-.accounts-scroll{display:flex;gap:12px;padding:8px 20px 4px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
-.accounts-scroll::-webkit-scrollbar{display:none}
-.account-card{min-width:150px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;scroll-snap-align:start;cursor:pointer;transition:border-color .15s}
-.account-card:hover{border-color:var(--accent)}
-.account-card .acc-name{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.account-card .acc-balance{font-size:22px;font-weight:700;letter-spacing:-0.5px}
-.account-card .acc-projected{font-size:11px;color:var(--muted);margin-top:2px}
+/* Balance hero — the "do I have enough money" answer, front and center, no scrolling/hunting needed */
+.balance-hero{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 20px 2px}
+.balance-hero-label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.balance-hero-amount{font-size:34px;font-weight:800;letter-spacing:-0.5px;margin-top:2px}
+.balance-hero-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.balance-hero-add{background:var(--income);color:#04150a;border:none;width:40px;height:40px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;flex-shrink:0;margin-top:2px}
+.hero-accounts{display:flex;gap:8px;padding:10px 20px 16px;overflow-x:auto;scrollbar-width:none}
+.hero-accounts::-webkit-scrollbar{display:none}
+.hero-acct-chip{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 6px 6px 12px;white-space:nowrap;cursor:pointer;font-size:13px;flex-shrink:0;transition:border-color .15s}
+.hero-acct-chip:hover{border-color:var(--accent)}
+.hero-acct-chip .hac-name{color:var(--muted)}
+.hero-acct-chip .hac-amt{font-weight:600}
+.hero-acct-chip .hac-edit{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 4px;border-radius:6px}
+.hero-acct-chip .hac-edit:hover{background:var(--surface2)}
 .timeline{padding:0 20px}
 .acct-section{margin-bottom:20px}
 .acct-section:last-child{margin-bottom:0}
@@ -259,30 +266,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .section-title{padding:20px 40px 10px}
   .sync-banner{margin:8px 40px}
 
-  /* Home two-panel */
-  .home-layout{
-    display:grid;
-    grid-template-columns:minmax(280px,38%) 1fr;
-    grid-template-rows:1fr;
-    height:calc(100vh - 85px);
-    overflow:hidden;
-  }
-  .home-panel{overflow-y:auto;padding-bottom:32px}
-  .home-panel-right{border-left:1px solid var(--border)}
-
-  /* Accounts grid */
-  .accounts-scroll{
-    display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-    padding:0 24px 8px;gap:12px;
-    overflow-x:visible;scroll-snap-type:none;
-  }
-  .home-panel-left .accounts-scroll{padding:0 20px 8px}
-  .account-card{min-width:0;padding:20px 18px}
-  .account-card .acc-balance{font-size:24px}
+  /* Balance hero (desktop) */
+  .balance-hero{padding:20px 40px 4px}
+  .balance-hero-amount{font-size:42px}
+  .hero-accounts{padding:12px 40px 18px}
 
   /* Timeline */
-  .timeline{padding:0 24px}
+  .timeline{padding:0 40px}
   .tl-item{padding:12px 0}
   .tl-name{font-size:15px}
 
@@ -399,27 +389,28 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       </div>
       <button class="sync-banner-btn" id="sync-banner-btn" onclick="openSyncModal()">Connect</button>
     </div>
-    <div class="home-layout">
-      <div class="home-panel home-panel-left">
-        <div class="section-title">Accounts</div>
-        <div class="accounts-scroll" id="accounts-list"></div>
-        <button class="page-add-btn" onclick="openQuickTx()">＋ Add Transaction</button>
+
+    <div class="balance-hero">
+      <div>
+        <div class="balance-hero-label">Current Balance</div>
+        <div class="balance-hero-amount" id="hero-total-balance"></div>
+        <div class="balance-hero-sub" id="hero-total-projected"></div>
       </div>
-      <div class="home-panel home-panel-right">
-        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Cash Flow</span>
-          <span style="font-size:12px;color:var(--muted);padding-right:20px" id="combined-balance"></span>
-        </div>
-        <div class="month-nav">
-          <button onclick="changeHomeMonth(-1)">&#8249;</button>
-          <h2 id="home-month-label" style="font-size:16px"></h2>
-          <button onclick="changeHomeMonth(1)">&#8250;</button>
-          <button class="btn-today" id="home-today-btn" onclick="jumpHomeToday()" style="display:none">Today</button>
-        </div>
-        <div id="needs-review-wrap" class="needs-review-wrap" style="display:none"></div>
-        <div class="timeline" id="timeline"></div>
-      </div>
+      <button class="balance-hero-add" onclick="openQuickTx()" title="Add Transaction">＋</button>
     </div>
+    <div class="hero-accounts" id="hero-accounts-list"></div>
+
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Cash Flow</span>
+    </div>
+    <div class="month-nav">
+      <button onclick="changeHomeMonth(-1)">&#8249;</button>
+      <h2 id="home-month-label" style="font-size:16px"></h2>
+      <button onclick="changeHomeMonth(1)">&#8250;</button>
+      <button class="btn-today" id="home-today-btn" onclick="jumpHomeToday()" style="display:none">Today</button>
+    </div>
+    <div id="needs-review-wrap" class="needs-review-wrap" style="display:none"></div>
+    <div class="timeline" id="timeline"></div>
   </div>
 
   <!-- EXPENSES PAGE -->
@@ -1729,21 +1720,26 @@ function renderHome() {
   }
 
   const totalBalance = data.accounts.reduce((s, a) => s + currentMap[a.id], 0);
+  const totalProjected = data.accounts.reduce((s, a) => s + projMap[a.id], 0);
 
-  document.getElementById('accounts-list').innerHTML = data.accounts.map(a => `
-    <div class="account-card" onclick="focusAccountSection('${a.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="acc-name">${escapeHtml(a.name)}</div>
-        <button class="sr-history-btn" title="Edit account" onclick="event.stopPropagation();editAccount('${a.id}')">✏️</button>
-      </div>
-      <div class="acc-balance">${fmt(currentMap[a.id])}</div>
-      <div class="acc-projected" style="color:${projMap[a.id] >= currentMap[a.id] ? 'var(--income)' : 'var(--expense)'}">
-        30d: ${fmt(projMap[a.id])}
-      </div>
+  // The big number up top answers "do I have enough money" at a glance, with no scrolling or
+  // hunting required — everything below it (chips, then the timeline) is supporting detail.
+  document.getElementById('hero-total-balance').textContent = fmt(totalBalance);
+  const projEl = document.getElementById('hero-total-projected');
+  if (data.accounts.length) {
+    projEl.textContent = `30-day outlook: ${fmt(totalProjected)}`;
+    projEl.style.color = totalProjected >= totalBalance ? 'var(--income)' : 'var(--expense)';
+  } else {
+    projEl.textContent = '';
+  }
+
+  document.getElementById('hero-accounts-list').innerHTML = data.accounts.map(a => `
+    <div class="hero-acct-chip" onclick="focusAccountSection('${a.id}')">
+      <span class="hac-name">${escapeHtml(a.name)}</span>
+      <span class="hac-amt">${fmt(currentMap[a.id])}</span>
+      <button class="hac-edit" title="Edit account" onclick="event.stopPropagation();editAccount('${a.id}')">✏️</button>
     </div>
   `).join('');
-
-  document.getElementById('combined-balance').textContent = `Total: ${fmt(totalBalance)}`;
 
   renderNeedsReview();
 
