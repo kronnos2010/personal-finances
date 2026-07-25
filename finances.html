@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
 <title>Personal Finances</title>
 <script src="https://accounts.google.com/gsi/client" onload="initGIS()" async></script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
   --bg:#0f172a;--surface:#1e293b;--surface2:#273449;--border:#334155;
   --text:#f1f5f9;--muted:#94a3b8;--income:#22c55e;--expense:#ef4444;
@@ -23,11 +23,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .header h1{font-size:18px;font-weight:700;letter-spacing:-0.3px}
 .header .subtitle{font-size:12px;color:var(--muted)}
 .header-right{display:flex;gap:4px;align-items:center}
-.icon-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;width:36px;height:36px}
+.icon-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;width:44px;height:44px}
 .icon-btn:hover{background:var(--surface2)}
 .page{flex:1;overflow-y:auto;padding-bottom:calc(var(--nav) + 16px);display:none}
 .page.active{display:block}
-.bottom-nav{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);display:flex;height:var(--nav);z-index:20}
+.bottom-nav{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);display:flex;height:calc(var(--nav) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);z-index:20}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;font-weight:500;padding:8px;transition:color .15s}
 .nav-btn .icon{font-size:20px;line-height:1}
 .nav-btn.active{color:var(--accent)}
@@ -76,7 +76,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .tl-group{margin-bottom:4px}
 .tl-date-header{font-size:12px;font-weight:600;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 .tl-date-header .days-away{font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:20px}
-.tl-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.tl-item{display:flex;align-items:center;gap:12px;padding:10px 0;min-height:44px;border-bottom:1px solid var(--border)}
 .tl-item:last-child{border-bottom:none}
 .tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .tl-dot.income{background:var(--income)}
@@ -114,7 +114,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .settings-row:first-of-type{border-radius:var(--radius) var(--radius) 0 0}
 .settings-row:last-of-type{border-radius:0 0 var(--radius) var(--radius);border-bottom:none}
 .settings-row:only-of-type{border-radius:var(--radius);border-bottom:none}
-.settings-row .sr-left{flex:1}
+.settings-row .sr-left{flex:1;min-width:0}
 .settings-row .sr-title{font-size:14px;font-weight:500}
 .settings-row .sr-sub{font-size:12px;color:var(--muted)}
 .settings-row .sr-right{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
@@ -122,7 +122,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .modal-overlay.open{display:flex}
 /* Opened from within the expense-history modal — must paint above it regardless of DOM order */
 #confirm-var-overlay{z-index:110}
-.modal{background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px 20px 40px}
+.modal{background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px 20px calc(40px + env(safe-area-inset-bottom))}
 .modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px}
 .modal h2{font-size:20px;font-weight:700;margin-bottom:20px}
 .steps{display:flex;gap:6px;margin-bottom:24px}
@@ -130,7 +130,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .step.done{background:var(--accent)}
 .form-group{margin-bottom:18px}
 .form-group label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.form-group input,.form-group select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:15px;outline:none;-webkit-appearance:none}
+.form-group input,.form-group select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:16px;outline:none;-webkit-appearance:none}
 .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
 .form-group select option{background:var(--surface);color:var(--text)}
 .pills{display:flex;flex-wrap:wrap;gap:8px}
@@ -176,7 +176,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .budget-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:12px 4px}
 .budget-item.clickable{cursor:pointer}
 .budget-item.clickable:hover{background:var(--surface2);border-radius:8px;margin:0 -4px;padding:12px 4px}
-.sr-history-btn{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px;border-radius:6px}
+.sr-history-btn{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;border-radius:8px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sr-history-btn:hover{background:var(--surface2)}
 /* Needs review */
 .needs-review-wrap{margin:0 20px 8px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);overflow:hidden}
@@ -192,7 +192,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .nr-item-month{font-size:11px;color:var(--muted)}
 .nr-update-btn{font-size:12px;color:var(--warn);padding:5px 12px;border:1px solid rgba(245,158,11,.4);border-radius:6px;background:none;cursor:pointer;font-weight:600;white-space:nowrap;flex-shrink:0}
 /* PIN lock */
-#pin-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px}
+#pin-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px calc(40px + env(safe-area-inset-bottom))}
 .pin-title{font-size:22px;font-weight:700;margin-bottom:8px;text-align:center}
 .pin-sub{font-size:14px;color:var(--muted);margin-bottom:40px;text-align:center}
 .pin-dots{display:flex;gap:16px;margin-bottom:16px}
