@@ -84,9 +84,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .cat-row-bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
 .cat-row-bar-fill{height:100%;border-radius:3px;background:var(--expense)}
 .tl-group{margin-bottom:4px}
-.tl-date-header{font-size:12px;font-weight:600;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-.tl-date-header .days-away{font-size:13px;font-weight:700}
-.tl-item{display:flex;align-items:center;gap:12px;padding:10px 0;min-height:44px;border-bottom:1px solid var(--border)}
+.tl-date-header{font-size:12px;font-weight:600;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--border)}
+.tl-item{display:flex;align-items:center;gap:10px;padding:10px 0;min-height:44px;border-bottom:1px solid var(--border)}
 .tl-item:last-child{border-bottom:none}
 .tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .tl-dot.income{background:var(--income)}
@@ -94,11 +93,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .tl-info{flex:1;min-width:0}
 .tl-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl-acct{font-size:11px;color:var(--muted)}
-.tl-amount-col{margin-right:36px}
-.tl-amount{font-weight:600;font-size:14px;white-space:nowrap}
+/* Fixed-width columns (not just a margin nudge) so amounts and running balances form two real,
+   vertically-aligned columns down the list, the way a bank ledger lines up its Amount/Balance columns. */
+.tl-amount-col{width:78px;flex-shrink:0}
+.tl-amount{font-weight:600;font-size:14px;white-space:nowrap;text-align:right}
 .tl-amount.income{color:var(--income)}
 .tl-amount.expense{color:var(--text)}
-.tl-balance{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+.tl-balance-col{width:88px;flex-shrink:0;border-left:1px solid var(--border);padding-left:10px}
+.tl-balance{font-size:13px;font-weight:600;text-align:right;white-space:nowrap}
 .month-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 20px}
 .month-nav h2{font-size:17px;font-weight:700}
 .month-nav button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px}
@@ -286,7 +288,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .timeline{padding:0 40px}
   .tl-item{padding:12px 0}
   .tl-name{font-size:15px}
-  .tl-amount-col{margin-right:100px}
+  .tl-amount-col{width:100px}
+  .tl-balance-col{width:120px}
 
   /* Expenses / history lists */
   .month-nav{padding:16px 40px}
@@ -1812,19 +1815,21 @@ function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance) {
       grouped[key].push(ev);
     }
 
+    // A true per-transaction ledger: the balance column updates line by line (not once per day), so
+    // same-day events need a fixed order to have a well-defined running value — getEvents() already
+    // sorts income before expenses before transfers on a tie, which is what's used here.
     let running = seedBalance;
     body = Object.entries(grouped).map(([dateStr, evs]) => {
       const d = parseDate(dateStr);
-      const netDay = evs.reduce((s, ev) => s + (ev.type === 'income' ? ev.amount : -ev.amount), 0);
-      running += netDay;
-      // Red is reserved for a real problem (an overdrawn/negative balance) — never a routine low-balance warning.
-      const balColor = running < 0 ? 'var(--expense)' : 'var(--text)';
       const items = evs.map(ev => {
+        running += ev.type === 'income' ? ev.amount : -ev.amount;
         const est = ev.estimated;
         const dotCls = est ? 'estimated' : ev.type;
         const amtCls = est ? 'estimated' : ev.type;
         const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
         const rowCls = est ? ' estimated-row' : ' clickable-row';
+        // Red is reserved for a real problem (an overdrawn balance) — never a routine low-balance warning.
+        const balColor = running < 0 ? 'var(--expense)' : 'var(--text)';
         // Every row is adjustable here now (not just unconfirmed/variable ones) — matches Payment
         // History, and is what actually lets a past transaction be corrected from the Cash Flow view.
         const click = `onclick="openConfirmModal('${ev.type === 'income' ? 'income' : 'bill'}','${ev.item.id}','${ev.monthKey}')"`;
@@ -1838,13 +1843,15 @@ function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance) {
           <div class="tl-amount-col">
             <div class="tl-amount ${amtCls}">${prefix}${fmt(ev.amount)}</div>
           </div>
+          <div class="tl-balance-col">
+            <div class="tl-balance" style="color:${balColor}">${fmt(running)}</div>
+          </div>
         </div>`;
       }).join('');
       return `
         <div class="tl-group">
           <div class="tl-date-header">
             <span>${fmtDate(d)}</span>
-            <span class="days-away" style="color:${balColor}">${fmt(running)}</span>
           </div>
           ${items}
         </div>
