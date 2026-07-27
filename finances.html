@@ -66,6 +66,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .chart-legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .chart-legend-swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0}
 .chart-empty{padding:24px 0;text-align:center;color:var(--muted);font-size:13px}
+.sm-buffer-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin:0 20px 16px}
+.sm-buffer-title{font-size:13px;font-weight:600}
+.sm-buffer-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.sm-buffer-input{width:90px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;text-align:right;-webkit-appearance:none}
+.sm-hero{margin:2px 0 14px}
+.sm-hero-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.sm-hero-amount{font-size:28px;font-weight:800;letter-spacing:-0.5px;margin-top:2px}
+.sm-hero-sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+.sm-move-btn{margin-top:12px}
 .cat-row{display:flex;align-items:center;gap:10px;padding:9px 0}
 .cat-row-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .cat-row-body{flex:1;min-width:0}
@@ -277,6 +286,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .timeline{padding:0 40px}
   .tl-item{padding:12px 0}
   .tl-name{font-size:15px}
+  .tl-amount-col{margin-right:100px}
 
   /* Expenses / history lists */
   .month-nav{padding:16px 40px}
@@ -293,6 +303,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
   /* Reports */
   .chart-card{margin:0 40px 20px}
+
+  /* Smart Money */
+  .sm-buffer-row{margin:0 40px 16px}
 
   /* Hide bottom nav */
   .bottom-nav{display:none}
@@ -355,6 +368,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       </button>
       <button class="sidebar-btn" id="snav-reports" onclick="openPage('reports')">
         <span class="snav-icon">📊</span><span>Reports</span>
+      </button>
+      <button class="sidebar-btn" id="snav-smart" onclick="openPage('smart')">
+        <span class="snav-icon">🧠</span><span>Smart Money</span>
       </button>
       <button class="sidebar-btn" id="snav-settings" onclick="openPage('settings')">
         <span class="snav-icon">⚙️</span><span>Settings</span>
@@ -472,6 +488,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <div style="height:20px"></div>
   </div>
 
+  <!-- SMART MONEY PAGE -->
+  <div id="page-smart" class="page">
+    <div class="section-title">Smart Money</div>
+    <div class="sm-buffer-row">
+      <div>
+        <div class="sm-buffer-title">Safety buffer</div>
+        <div class="sm-buffer-sub">Minimum left in each account, just in case</div>
+      </div>
+      <input class="sm-buffer-input" type="number" inputmode="decimal" step="10" id="sm-buffer-input" onchange="setSmartMoneyBuffer(this.value)">
+    </div>
+    <div id="smart-money-list"></div>
+    <div style="height:20px"></div>
+  </div>
+
   <!-- SETTINGS PAGE -->
   <div id="page-settings" class="page">
     <div class="section-title">Accounts</div>
@@ -518,6 +548,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     </button>
     <button class="nav-btn" id="nav-reports" onclick="openPage('reports')">
       <span class="icon">📊</span><span>Reports</span>
+    </button>
+    <button class="nav-btn" id="nav-smart" onclick="openPage('smart')">
+      <span class="icon">🧠</span><span>Smart Money</span>
     </button>
     <button class="nav-btn" id="nav-settings" onclick="openPage('settings')">
       <span class="icon">⚙️</span><span>Settings</span>
@@ -660,7 +693,8 @@ const DEFAULT_DATA = {
   accounts: [],
   income: [],
   bills: [],
-  transfers: []
+  transfers: [],
+  smartMoneyBuffer: 500
 };
 
 let data = null;
@@ -1151,6 +1185,7 @@ function renderCurrentPage() {
   else if (id === 'expenses') renderExpenses();
   else if (id === 'income') renderIncome();
   else if (id === 'reports') renderReports();
+  else if (id === 'smart') renderSmartMoney();
   else if (id === 'settings') renderSettings();
 }
 
@@ -2126,6 +2161,187 @@ function renderCategoryBreakdown() {
   `).join('');
 }
 
+// ===== SMART MONEY (safe-to-save) =====
+// Same idea as the "safe-to-spend" feature in apps like Digit/Plum/Chime: take the balance the account
+// is projected to dip to right before its next paycheck (a hard deterministic projection here, since
+// every bill/income is already scheduled — no spending-pattern guesswork needed), subtract a small
+// user-set safety buffer, and whatever's left over is what can be moved to savings today without any
+// chance of overdrawing before that paycheck lands.
+function getSmartMoneyBuffer() {
+  return data.smartMoneyBuffer != null ? data.smartMoneyBuffer : 500;
+}
+
+function setSmartMoneyBuffer(val) {
+  const parsed = parseFloat(val);
+  data.smartMoneyBuffer = isNaN(parsed) ? 500 : Math.max(0, parsed);
+  saveData();
+  renderSmartMoney();
+}
+
+// Projects one account's balance day-by-day (same net-per-day approach as renderAccountTimeline, so a
+// same-day income+bill can't be mis-ordered) from today through its next scheduled income event — or
+// 90 days out if none is scheduled — and finds the lowest point along the way.
+function getSmartMoneyPlan(acct, bufferAmount) {
+  const t = today();
+  const horizonEnd = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 90);
+  const events = getEvents(t, horizonEnd).filter(ev => ev.item.account === acct.id);
+  const nextIncomeEv = events.find(ev => ev.type === 'income');
+  const horizonDate = nextIncomeEv ? nextIncomeEv.date : horizonEnd;
+
+  const byDay = {};
+  for (const ev of events) {
+    if (ev.date > horizonDate) continue;
+    const key = isoDate(ev.date);
+    byDay[key] = (byDay[key] || 0) + (ev.type === 'income' ? ev.amount : -ev.amount);
+  }
+  const days = Object.keys(byDay).sort();
+
+  const startBalance = getCurrentBalance(acct);
+  let running = startBalance;
+  let minBalance = running, minDate = t;
+  const series = [{ date: new Date(t), balance: running }];
+  for (const key of days) {
+    running += byDay[key];
+    const d = parseDate(key);
+    series.push({ date: d, balance: running });
+    if (running < minBalance) { minBalance = running; minDate = d; }
+  }
+
+  const safeToMove = Math.max(0, Math.round((minBalance - bufferAmount) * 100) / 100);
+  return {
+    acct, currentBalance: startBalance, safeToMove, minBalance, minDate,
+    nextIncomeDate: nextIncomeEv ? nextIncomeEv.date : null, series
+  };
+}
+
+function smartZoneColor(bal, buffer) {
+  return bal < 0 ? 'var(--expense)' : bal < buffer ? 'var(--warn)' : 'var(--income)';
+}
+
+function renderSmartMoneyChart(containerId, plan, bufferAmount) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const points = plan.series;
+  const W = 720, H = 200, PAD_L = 52, PAD_R = 14, PAD_T = 14, PAD_B = 26;
+  const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
+
+  const balances = points.map(p => p.balance);
+  const dataMin = Math.min(0, ...balances);
+  const dataMax = Math.max(bufferAmount, ...balances);
+  const yTicks = niceTicks(dataMin, dataMax, 4);
+  const yMin = yTicks[0], yMax = yTicks[yTicks.length - 1];
+
+  const firstT = points[0].date.getTime(), lastT = points[points.length - 1].date.getTime();
+  const x = scaleLinear(firstT, lastT, PAD_L, PAD_L + plotW);
+  const y = scaleLinear(yMin, yMax, PAD_T + plotH, PAD_T);
+
+  let gridSvg = '', refSvg = '';
+  yTicks.forEach(v => {
+    const yy = y(v);
+    gridSvg += `<line x1="${PAD_L}" y1="${yy}" x2="${PAD_L + plotW}" y2="${yy}" style="stroke:var(--border)" stroke-width="1"/>`;
+    gridSvg += `<text x="${PAD_L - 8}" y="${yy + 4}" text-anchor="end" font-size="10" style="fill:var(--muted)">${fmtCompact(v)}</text>`;
+  });
+  if (yMin <= 0 && 0 <= yMax) {
+    refSvg += `<line x1="${PAD_L}" y1="${y(0)}" x2="${PAD_L + plotW}" y2="${y(0)}" style="stroke:var(--expense)" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
+  }
+  if (yMin <= bufferAmount && bufferAmount <= yMax) {
+    refSvg += `<line x1="${PAD_L}" y1="${y(bufferAmount)}" x2="${PAD_L + plotW}" y2="${y(bufferAmount)}" style="stroke:var(--warn)" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
+  }
+
+  // The shaded band is the direct visual answer to "how much could be moved, and until when" — its
+  // top edge tracks the balance line wherever it's above the buffer, and floors out at the buffer
+  // line wherever it's not (so the fill has zero height there rather than dipping below the baseline).
+  let areaSvg = '';
+  if (yMin <= bufferAmount) {
+    let areaPath = `M${x(firstT)},${y(bufferAmount)} `;
+    for (const p of points) areaPath += `L${x(p.date.getTime())},${y(Math.max(p.balance, bufferAmount))} `;
+    areaPath += `L${x(lastT)},${y(bufferAmount)} Z`;
+    areaSvg = `<path d="${areaPath}" fill="var(--chart-income)" opacity="0.15"/>`;
+  }
+
+  let xLabelSvg = '';
+  const labelCount = Math.min(points.length - 1, 5) || 1;
+  for (let i = 0; i <= labelCount; i++) {
+    const frac = i / labelCount;
+    const d = new Date(firstT + frac * (lastT - firstT));
+    xLabelSvg += `<text x="${x(d.getTime())}" y="${H - 8}" text-anchor="middle" font-size="10" style="fill:var(--muted)">${fmtDateShort(d)}</text>`;
+  }
+
+  let lineSvg = '', dotsSvg = '';
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const px = x(p.date.getTime()), py = y(p.balance);
+    if (i > 0) {
+      const prev = points[i - 1];
+      lineSvg += `<line x1="${x(prev.date.getTime())}" y1="${y(prev.balance)}" x2="${px}" y2="${py}" style="stroke:${smartZoneColor(p.balance, bufferAmount)}" stroke-width="2" stroke-linecap="round"/>`;
+    }
+    dotsSvg += `<circle cx="${px}" cy="${py}" r="4" style="fill:${smartZoneColor(p.balance, bufferAmount)};stroke:var(--surface)" stroke-width="2"><title>${escapeHtml(fmtDateShort(p.date))}: ${fmt(p.balance)}</title></circle>`;
+  }
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${gridSvg}${refSvg}${areaSvg}${lineSvg}${dotsSvg}${xLabelSvg}
+    </svg>
+    <div class="chart-legend">
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--chart-income)"></span>Safe to move</div>
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--warn)"></span>Below buffer</div>
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--expense)"></span>Negative</div>
+    </div>
+  `;
+}
+
+function renderSmartMoney() {
+  const bufferAmount = getSmartMoneyBuffer();
+  const bufferInput = document.getElementById('sm-buffer-input');
+  if (bufferInput && document.activeElement !== bufferInput) bufferInput.value = bufferAmount;
+
+  const list = document.getElementById('smart-money-list');
+  if (!list) return;
+  if (!data.accounts.length) {
+    list.innerHTML = '<div class="chart-empty">Add an account in Settings to see savings suggestions</div>';
+    return;
+  }
+
+  list.innerHTML = data.accounts.map(acct => `
+    <div class="chart-card">
+      <div class="chart-title">${escapeHtml(acct.name)}</div>
+      <div class="chart-sub">Current balance: ${fmt(getCurrentBalance(acct))}</div>
+      <div class="sm-hero" id="sm-hero-${acct.id}"></div>
+      <div id="sm-chart-${acct.id}"></div>
+      <div id="sm-action-${acct.id}"></div>
+    </div>
+  `).join('');
+
+  for (const acct of data.accounts) {
+    const plan = getSmartMoneyPlan(acct, bufferAmount);
+    const heroEl = document.getElementById(`sm-hero-${acct.id}`);
+    const dipStr = fmtDateShort(plan.minDate);
+    const nextIncomeStr = plan.nextIncomeDate ? fmtDateShort(plan.nextIncomeDate) : null;
+
+    let sub;
+    if (plan.minBalance < 0) {
+      sub = `Projected to go negative (${fmt(plan.minBalance)}) on ${dipStr}${nextIncomeStr ? `, before your next income on ${nextIncomeStr}` : ''} — don't move anything from this account right now.`;
+    } else if (plan.safeToMove <= 0) {
+      sub = `Balance dips to ${fmt(plan.minBalance)} on ${dipStr}${nextIncomeStr ? `, right before your next income on ${nextIncomeStr}` : ''} — at or below your ${fmt(bufferAmount)} buffer, so nothing extra is safe to move yet.`;
+    } else {
+      sub = `Keeps at least ${fmt(bufferAmount)} in the account through ${dipStr}${nextIncomeStr ? `, right before your next income on ${nextIncomeStr}` : ' (90-day outlook — no income scheduled for this account yet)'}.`;
+    }
+
+    heroEl.innerHTML = `
+      <div class="sm-hero-label">Safe to move to savings</div>
+      <div class="sm-hero-amount" style="color:${plan.safeToMove > 0 ? 'var(--text)' : 'var(--muted)'}">${fmt(plan.safeToMove)}</div>
+      <div class="sm-hero-sub">${sub}</div>
+    `;
+
+    renderSmartMoneyChart(`sm-chart-${acct.id}`, plan, bufferAmount);
+
+    const actionEl = document.getElementById(`sm-action-${acct.id}`);
+    actionEl.innerHTML = plan.safeToMove > 0
+      ? `<button class="btn btn-secondary sm-move-btn" onclick='openQuickTx({type:"transfer",fromAccount:"${acct.id}",amount:${plan.safeToMove},name:"Move to savings"})'>Move ${fmt(plan.safeToMove)} to savings</button>`
+      : '';
+  }
+}
+
 // ===== RENDER SETTINGS =====
 function renderSettings() {
   document.getElementById('settings-accounts').innerHTML = data.accounts.map(a => `
@@ -2191,6 +2407,7 @@ function openPage(name) {
   else if (name === 'expenses') renderExpenses();
   else if (name === 'income') renderIncome();
   else if (name === 'reports') renderReports();
+  else if (name === 'smart') renderSmartMoney();
   else if (name === 'settings') renderSettings();
 }
 
@@ -2549,14 +2766,22 @@ function wizardSave() {
 // ===== QUICK TRANSACTION (one-off expense / income / transfer between accounts) =====
 let quickTxState = {};
 
-function openQuickTx() {
+// `prefill` (optional) lets another feature (e.g. Smart Money's "Move to savings" button) open this
+// straight to a populated Transfer form instead of the blank default — merged over the usual defaults.
+function openQuickTx(prefill) {
   quickTxState = {
     type: 'expense', name: '', amount: 0,
     account: data.accounts[0]?.id,
     fromAccount: data.accounts[0]?.id,
     toAccount: (data.accounts[1] || data.accounts[0])?.id,
-    category: 'other', date: isoDate(today())
+    category: 'other', date: isoDate(today()),
+    ...prefill
   };
+  if (prefill && prefill.fromAccount && !prefill.toAccount) {
+    const savingsAcct = data.accounts.find(a => a.id !== prefill.fromAccount && /saving/i.test(a.name));
+    const firstOther = data.accounts.find(a => a.id !== prefill.fromAccount);
+    quickTxState.toAccount = (savingsAcct || firstOther || data.accounts[0])?.id;
+  }
   renderQuickTxPills();
   renderQuickTxBody();
   document.getElementById('quick-tx-overlay').classList.add('open');
