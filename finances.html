@@ -1276,7 +1276,8 @@ function getOccurrences(item, fromDate, toDate) {
 
   function mkOcc(d, mk) {
     const ov = (item.overrides || {})[mk];
-    const applied = !!(ov && ov.confirmed && ov.amount);
+    // `ov.amount != null` (not a truthy check) — a confirmed actual of exactly $0 must still count as applied.
+    const applied = !!(ov && ov.confirmed && ov.amount != null);
     return {
       date: new Date(d),
       amount: applied ? ov.amount : getEffectiveAmount(item, d),
@@ -1314,7 +1315,7 @@ function getOccurrences(item, fromDate, toDate) {
         if (d > to) break;
         if (d >= from) results.push({
           date: d,
-          amount: (applied && ov.amount) ? ov.amount : getEffectiveAmount(item, d),
+          amount: (applied && ov.amount != null) ? ov.amount : getEffectiveAmount(item, d),
           estimated: isVar && !applied,
           overridden: applied,
           monthKey: mk
@@ -1344,7 +1345,7 @@ function getOccurrences(item, fromDate, toDate) {
           if (d > to) break;
           if (d >= from) results.push({
             date: d,
-            amount: (applied && ov.amount) ? ov.amount : getEffectiveAmount(item, d),
+            amount: (applied && ov.amount != null) ? ov.amount : getEffectiveAmount(item, d),
             estimated: isVar && !applied,
             overridden: applied,
             monthKey: mk
