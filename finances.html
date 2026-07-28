@@ -2450,7 +2450,10 @@ function renderSettings() {
         <div class="sr-title">${escapeHtml(a.name)}</div>
         <div class="sr-sub">Last set: ${fmt(a.balance)} on ${fmtDateShort(parseDate(a.balanceDate || isoDate(today())))}</div>
       </div>
-      <div class="sr-right">${fmt(getCurrentBalance(a))} ›</div>
+      <div class="sr-right">
+        <button class="sr-history-btn" title="Delete account" onclick="event.stopPropagation();deleteAccount('${a.id}')">🗑️</button>
+        ${fmt(getCurrentBalance(a))} ›
+      </div>
     </div>
   `).join('');
 
@@ -2579,6 +2582,38 @@ function saveAccount() {
   closeModal('edit-account-overlay');
   renderCurrentPage();
   showToast(delta !== 0 ? `Account updated — added a ${delta > 0 ? '+' : '-'}${fmt(delta)} adjustment` : 'Account updated');
+}
+
+// Deleting an account can leave bills/income pointing at an id that no longer exists. If another
+// account remains, those items are reassigned to it (reusing repairOrphanedAccounts(), the same
+// self-healing path already used for corrupted/legacy data) and any transfer touching this account
+// is removed outright, since a transfer intrinsically means "between these two accounts" — there's no
+// sensible reassignment for one. If this is the ONLY account and it still has bills/income attached,
+// deletion is blocked instead of silently orphaning them with nowhere to reattach to.
+function deleteAccount(id) {
+  const acct = data.accounts.find(a => a.id === id);
+  if (!acct) return;
+  const linkedItems = [...data.income, ...data.bills].filter(i => i.account === id);
+  const linkedTransfers = (data.transfers || []).filter(t => t.fromAccount === id || t.toAccount === id);
+
+  if (linkedItems.length && data.accounts.length === 1) {
+    showToast(`Move or delete ${linkedItems.length} bill/income item${linkedItems.length === 1 ? '' : 's'} off this account first, or add another account`);
+    return;
+  }
+
+  let msg = `Delete "${acct.name}"?`;
+  const notes = [];
+  if (linkedItems.length) notes.push(`${linkedItems.length} bill/income item${linkedItems.length === 1 ? '' : 's'} will move to another account`);
+  if (linkedTransfers.length) notes.push(`${linkedTransfers.length} transfer${linkedTransfers.length === 1 ? '' : 's'} involving it will be removed`);
+  if (notes.length) msg += `\n\n${notes.join(', and ')}.`;
+  if (!confirm(msg)) return;
+
+  data.accounts = data.accounts.filter(a => a.id !== id);
+  if (data.transfers) data.transfers = data.transfers.filter(t => t.fromAccount !== id && t.toAccount !== id);
+  repairOrphanedAccounts();
+  saveData();
+  renderCurrentPage();
+  showToast('Account deleted');
 }
 
 // ===== EDIT ITEM =====
