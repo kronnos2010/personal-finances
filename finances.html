@@ -51,12 +51,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .hero-acct-chip .hac-edit{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 4px;border-radius:6px}
 .hero-acct-chip .hac-edit:hover{background:var(--surface2)}
 .timeline{padding:0 20px}
-.acct-section{margin-bottom:20px}
-.acct-section:last-child{margin-bottom:0}
-.acct-section-hdr{display:flex;align-items:baseline;justify-content:space-between;padding:4px 0 10px;border-bottom:2px solid var(--border);margin-bottom:2px;cursor:pointer}
-.acct-section-name{font-size:15px;font-weight:700}
-.acct-section-bal{font-size:14px;font-weight:600}
-.acct-section-empty{padding:16px 0;color:var(--muted);font-size:13px}
+/* Flow table — one row per calendar day, one column-group (transactions + balance) per account,
+   modeled directly on the original spreadsheet's "Flow" sheet (Income/Cal Expense/Var Expense/Total
+   per account, side by side). Horizontally scrollable with the date column frozen, since the number
+   of accounts is unbounded but a phone screen isn't. */
+.flow-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.flow-table{border-collapse:collapse;width:100%;font-size:12px}
+.flow-table th,.flow-table td{padding:6px 10px;vertical-align:top;border-bottom:1px solid var(--border)}
+.flow-acct-hdr{font-size:13px;font-weight:700;text-align:left;color:var(--text);border-left:1px solid var(--border);white-space:nowrap;cursor:pointer}
+.flow-corner{background:var(--bg)}
+.flow-date-col{position:sticky;left:0;background:var(--bg);z-index:1;min-width:52px;text-align:left;white-space:nowrap}
+.flow-date-day{font-size:12px;font-weight:700}
+.flow-date-weekday{font-size:10px;color:var(--muted)}
+.flow-txns-cell{border-left:1px solid var(--border);min-width:120px}
+.flow-bal-cell{font-weight:700;text-align:right;min-width:84px;white-space:nowrap}
+.flow-txn-line{display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;padding:3px 0;border-radius:6px}
+.flow-txn-line:hover{background:var(--surface-hover,rgba(255,255,255,.05))}
+.flow-txn-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;font-size:11px}
+.flow-txn-amt{font-weight:600;font-size:11px;white-space:nowrap;flex-shrink:0}
+.flow-txn-amt.income{color:var(--income)}
+.flow-txn-amt.expense{color:var(--text)}
+.flow-txn-amt.estimated{color:var(--warn)}
+.flow-empty-dash{color:var(--muted)}
+.flow-row-today{background:rgba(59,130,246,.08)}
+.flow-row-today .flow-date-col{background:rgba(59,130,246,.08)}
+.flow-date-today-badge{font-size:9px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.3px}
 /* Reports charts */
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:0 20px 16px}
 .chart-title{font-size:14px;font-weight:700;margin-bottom:2px}
@@ -83,27 +102,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .cat-row-amt{font-weight:600}
 .cat-row-bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
 .cat-row-bar-fill{height:100%;border-radius:3px;background:var(--expense)}
-.tl-group{margin-bottom:4px}
-.tl-date-header{font-size:12px;font-weight:600;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--border)}
-.tl-item{display:flex;align-items:center;gap:10px;padding:10px 0;min-height:44px;border-bottom:1px solid var(--border)}
-.tl-item:last-child{border-bottom:none}
-.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.tl-dot.income{background:var(--income)}
-.tl-dot.expense{background:var(--expense)}
-.tl-info{flex:1;min-width:0}
-.tl-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tl-acct{font-size:11px;color:var(--muted)}
-/* Fixed-width columns (not just a margin nudge) so amounts and running balances form two real,
-   vertically-aligned columns down the list, the way a bank ledger lines up its Amount/Balance columns. */
-.tl-amount-col{width:78px;flex-shrink:0}
-.tl-amount{font-weight:600;font-size:14px;white-space:nowrap;text-align:right}
-.tl-amount.income{color:var(--income)}
-.tl-amount.expense{color:var(--text)}
-.tl-balance-col{width:88px;flex-shrink:0;border-left:1px solid var(--border);padding-left:10px}
-.tl-balance{font-size:13px;font-weight:600;text-align:right;white-space:nowrap}
-.tl-today-marker{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.4px}
-.tl-today-marker::before,.tl-today-marker::after{content:'';flex:1;height:1px;background:var(--accent);opacity:.4}
-.tl-today-badge{font-size:10px;font-weight:700;color:var(--accent);background:rgba(59,130,246,.15);padding:2px 6px;border-radius:6px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
 .month-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 20px}
 .month-nav h2{font-size:17px;font-weight:700}
 .month-nav button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px}
@@ -181,12 +179,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .cat-education{background:rgba(20,184,166,.2);color:#2dd4bf}
 .cat-other{background:rgba(148,163,184,.2);color:#94a3b8}
 /* Variable / estimated */
-.tl-dot.estimated{background:var(--warn)}
-.tl-amount.estimated{color:var(--warn)}
-.tl-item.estimated-row{cursor:pointer}
-.tl-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:10px 4px}
-.tl-item.clickable-row{cursor:pointer}
-.tl-item.clickable-row:hover{background:var(--surface-hover,rgba(255,255,255,.05));border-radius:8px;margin:0 -4px;padding:10px 4px}
 .est-label{font-size:10px;color:var(--warn);font-weight:600;letter-spacing:.3px}
 .budget-item.estimated-row{cursor:pointer}
 .budget-item.estimated-row:hover{background:rgba(245,158,11,.07);border-radius:8px;margin:0 -4px;padding:12px 4px}
@@ -289,10 +281,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
   /* Timeline */
   .timeline{padding:0 40px}
-  .tl-item{padding:12px 0}
-  .tl-name{font-size:15px}
-  .tl-amount-col{width:100px}
-  .tl-balance-col{width:120px}
+  .flow-table{font-size:13px}
+  .flow-txns-cell{min-width:150px}
+  .flow-bal-cell{min-width:100px}
 
   /* Expenses / history lists */
   .month-nav{padding:16px 40px}
@@ -320,9 +311,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   .modal-overlay{align-items:center}
   .modal{border-radius:16px;max-width:520px;margin:0 auto}
 }
-/* Variable/estimated expense styles */
-.tl-dot.estimated{background:var(--warn)}
-.tl-amount.estimated{color:var(--warn)}
 .needs-review-item{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
 .needs-review-item:last-child{border-bottom:none}
 .needs-review-item:active{background:var(--surface2)}
@@ -1736,12 +1724,13 @@ function jumpHomeToday() {
   renderHome();
 }
 
-// Scrolls the page down to one account's own section instead of opening the edit-account modal —
-// tapping a summary card is "show me this account's transactions", not "let me rename this account"
-// (that's still reachable via the ✏️ on the card, or by tapping the section header below).
+// Scrolls the flow table horizontally to bring one account's column-group into view, instead of
+// opening the edit-account modal — tapping a summary card is "show me this account's transactions",
+// not "let me rename this account" (that's still reachable via the ✏️ on the card, or by tapping the
+// account's column header).
 function focusAccountSection(id) {
-  const el = document.getElementById('acct-section-' + id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const el = document.getElementById('flow-acct-hdr-' + id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
 }
 
 // Cash Flow always renders the whole current month, so without this, landing on the tab drops the
@@ -1749,7 +1738,7 @@ function focusAccountSection(id) {
 // when actually navigating TO the tab (openPage/init), never from renderHome() itself, so re-renders
 // triggered by editing/confirming a transaction while already on the page don't yank the scroll away.
 function scrollHomeToToday() {
-  const el = document.querySelector('[id^="tl-today-"]');
+  const el = document.getElementById('flow-today-row');
   if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
 }
 
@@ -1818,97 +1807,95 @@ function renderHome() {
     return;
   }
 
-  // One section per account (instead of one merged list) — makes it clear which account each
-  // payment moves through, and each section's running balance starts from that account's own balance
-  // as of the day before the browsed month, not its all-time current balance.
-  tl.innerHTML = data.accounts.map(acct =>
-    renderAccountTimeline(acct, events, getAccountBalanceAsOf(acct, dayBeforeMonth), currentMap[acct.id], isCurrentMonth)
-  ).join('');
+  // A single date-indexed table, one column-group (transactions + balance) per account, modeled on
+  // the original spreadsheet's "Flow" sheet — makes it possible to compare accounts on the same date
+  // at a glance instead of scrolling between separate per-account sections.
+  tl.innerHTML = renderFlowTable(data.accounts, events, dayBeforeMonth, monthStart, monthEnd, isCurrentMonth);
 }
 
-function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance, isCurrentMonth) {
-  const events = allEvents.filter(ev => ev.item.account === acct.id);
-
-  let body;
-  if (events.length === 0) {
-    body = `<div class="acct-section-empty"${isCurrentMonth ? ` id="tl-today-${acct.id}"` : ''}>No activity this month</div>`;
-  } else {
-    const grouped = {};
-    for (const ev of events) {
-      const key = isoDate(ev.date);
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(ev);
-    }
-
-    // A true per-transaction ledger: the balance column updates line by line (not once per day), so
-    // same-day events need a fixed order to have a well-defined running value — getEvents() already
-    // sorts income before expenses before transfers on a tie, which is what's used here.
-    const dateKeys = Object.keys(grouped).sort();
-    const todayKey = isoDate(today());
-    let markerPlaced = !isCurrentMonth; // browsing a past/future month — no "today" marker to place
-    let running = seedBalance;
-    const chunks = [];
-    for (const dateStr of dateKeys) {
-      if (!markerPlaced && dateStr > todayKey) {
-        chunks.push(`<div class="tl-today-marker" id="tl-today-${acct.id}"><span>Today</span></div>`);
-        markerPlaced = true;
-      }
-      const isToday = isCurrentMonth && dateStr === todayKey;
-      if (isToday) markerPlaced = true;
-      const d = parseDate(dateStr);
-      const items = grouped[dateStr].map(ev => {
-        running += ev.type === 'income' ? ev.amount : -ev.amount;
-        const est = ev.estimated;
-        const dotCls = est ? 'estimated' : ev.type;
-        const amtCls = est ? 'estimated' : ev.type;
-        const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
-        const rowCls = est ? ' estimated-row' : ' clickable-row';
-        // Red is reserved for a real problem (an overdrawn balance) — never a routine low-balance warning.
-        const balColor = running < 0 ? 'var(--expense)' : 'var(--text)';
-        // Every row is adjustable here now (not just unconfirmed/variable ones) — matches Payment
-        // History, and is what actually lets a past transaction be corrected from the Cash Flow view.
-        // context='cashflow': a one-off (recurrence 'once') item or transfer can be deleted outright
-        // here; a recurring item can only be adjusted here — deleting one of its occurrences is a
-        // Payment History ('history' context) action, kept separate so a stray tap can't remove it.
-        const kind = ev.isTransfer ? 'transfer' : (ev.type === 'income' ? 'income' : 'bill');
-        const click = `onclick="openConfirmModal('${kind}','${ev.item.id}','${ev.monthKey}','cashflow')"`;
-        return `
-        <div class="tl-item${rowCls}" ${click}>
-          <div class="tl-dot ${dotCls}"></div>
-          <div class="tl-info">
-            <div class="tl-name">${escapeHtml(ev.item.name)}</div>
-            ${est ? '<div class="tl-acct"><span class="est-label">est.</span></div>' : ''}
-          </div>
-          <div class="tl-amount-col">
-            <div class="tl-amount ${amtCls}">${prefix}${fmt(ev.amount)}</div>
-          </div>
-          <div class="tl-balance-col">
-            <div class="tl-balance" style="color:${balColor}">${fmt(running)}</div>
-          </div>
-        </div>`;
-      }).join('');
-      chunks.push(`
-        <div class="tl-group"${isToday ? ` id="tl-today-${acct.id}"` : ''}>
-          <div class="tl-date-header">
-            <span>${fmtDate(d)}${isToday ? ' <span class="tl-today-badge">Today</span>' : ''}</span>
-          </div>
-          ${items}
-        </div>
-      `);
-    }
-    if (!markerPlaced) {
-      chunks.push(`<div class="tl-today-marker" id="tl-today-${acct.id}"><span>Today</span></div>`);
-    }
-    body = chunks.join('');
+function renderFlowTable(accounts, events, dayBeforeMonth, monthStart, monthEnd, isCurrentMonth) {
+  // Seed + running balance per account, and that account's events grouped by day — same net-per-day
+  // math as before, just keyed per account instead of pre-filtering into separate account sections.
+  const running = {};
+  const byAcctDay = {};
+  for (const a of accounts) {
+    running[a.id] = getAccountBalanceAsOf(a, dayBeforeMonth);
+    byAcctDay[a.id] = {};
+  }
+  for (const ev of events) {
+    const aid = ev.item.account;
+    if (!byAcctDay[aid]) continue;
+    const key = isoDate(ev.date);
+    if (!byAcctDay[aid][key]) byAcctDay[aid][key] = [];
+    byAcctDay[aid][key].push(ev);
   }
 
+  const todayKey = isoDate(today());
+  const lastDay = monthEnd.getDate();
+  const rows = [];
+
+  // Every calendar day gets a row — not just days with activity — matching the original spreadsheet,
+  // so a quiet stretch still shows the balance holding steady instead of silently skipping ahead.
+  for (let day = 1; day <= lastDay; day++) {
+    const d = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+    const dateKey = isoDate(d);
+    const isToday = isCurrentMonth && dateKey === todayKey;
+
+    let cellsHtml = '';
+    for (const a of accounts) {
+      const evs = byAcctDay[a.id][dateKey] || [];
+      let netDay = 0;
+      // Same-day events are listed (and applied to the running total) income-before-expense, per
+      // getEvents()'s existing sort order — kept individually tappable, same as the old per-account view.
+      const txnLines = evs.map(ev => {
+        netDay += ev.type === 'income' ? ev.amount : -ev.amount;
+        const est = ev.estimated;
+        const amtCls = est ? 'estimated' : ev.type;
+        const prefix = ev.type === 'income' ? '+' : (est ? '~' : '-');
+        const kind = ev.isTransfer ? 'transfer' : (ev.type === 'income' ? 'income' : 'bill');
+        return `
+          <div class="flow-txn-line" onclick="openConfirmModal('${kind}','${ev.item.id}','${ev.monthKey}','cashflow')">
+            <span class="flow-txn-name">${escapeHtml(ev.item.name)}${est ? ' <span class="est-label">est.</span>' : ''}</span>
+            <span class="flow-txn-amt ${amtCls}">${prefix}${fmt(ev.amount)}</span>
+          </div>`;
+      }).join('');
+      running[a.id] += netDay;
+      const bal = running[a.id];
+      const balColor = bal < 0 ? 'var(--expense)' : 'var(--text)';
+      cellsHtml += `
+        <td class="flow-txns-cell">${txnLines || '<span class="flow-empty-dash">—</span>'}</td>
+        <td class="flow-bal-cell" style="color:${balColor}">${fmt(bal)}</td>
+      `;
+    }
+
+    rows.push(`
+      <tr class="flow-row${isToday ? ' flow-row-today' : ''}"${isToday ? ` id="flow-today-row"` : ''}>
+        <td class="flow-date-col">
+          <div class="flow-date-day">${d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</div>
+          <div class="flow-date-weekday">${isToday ? '<span class="flow-date-today-badge">Today</span>' : d.toLocaleDateString('en-CA', { weekday: 'short' })}</div>
+        </td>
+        ${cellsHtml}
+      </tr>
+    `);
+  }
+
+  const headerCells = accounts.map(a =>
+    `<th colspan="2" class="flow-acct-hdr" id="flow-acct-hdr-${a.id}" onclick="editAccount('${a.id}')">${escapeHtml(a.name)}</th>`
+  ).join('');
+
   return `
-    <div class="acct-section" id="acct-section-${acct.id}">
-      <div class="acct-section-hdr" onclick="editAccount('${acct.id}')">
-        <span class="acct-section-name">${escapeHtml(acct.name)}</span>
-        <span class="acct-section-bal" style="color:${currentBalance < 0 ? 'var(--expense)' : 'var(--text)'}">${fmt(currentBalance)}</span>
-      </div>
-      ${body}
+    <div class="flow-table-wrap">
+      <table class="flow-table">
+        <thead>
+          <tr>
+            <th class="flow-date-col flow-corner">Date</th>
+            ${headerCells}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.join('')}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -2291,7 +2278,7 @@ function setSmartMoneyBuffer(val) {
   renderSmartMoney();
 }
 
-// Projects one account's balance day-by-day (same net-per-day approach as renderAccountTimeline, so a
+// Projects one account's balance day-by-day (same net-per-day approach as the Cash Flow table, so a
 // same-day income+bill can't be mis-ordered) from today through its next scheduled income event — or
 // 90 days out if none is scheduled — and finds the lowest point along the way.
 function getSmartMoneyPlan(acct, bufferAmount) {
