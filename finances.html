@@ -101,6 +101,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .tl-amount.expense{color:var(--text)}
 .tl-balance-col{width:88px;flex-shrink:0;border-left:1px solid var(--border);padding-left:10px}
 .tl-balance{font-size:13px;font-weight:600;text-align:right;white-space:nowrap}
+.tl-today-marker{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.4px}
+.tl-today-marker::before,.tl-today-marker::after{content:'';flex:1;height:1px;background:var(--accent);opacity:.4}
+.tl-today-badge{font-size:10px;font-weight:700;color:var(--accent);background:rgba(59,130,246,.15);padding:2px 6px;border-radius:6px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
 .month-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 20px}
 .month-nav h2{font-size:17px;font-weight:700}
 .month-nav button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px}
@@ -618,13 +621,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <h2 id="cv-title">Update Bill</h2>
     <div id="cv-sub" style="color:var(--muted);font-size:13px;margin-bottom:20px"></div>
     <div class="edit-fields">
-      <div class="form-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Actual Day of Month</label><select id="cv-day"></select></div>
+      <div class="form-group" id="cv-amount-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>
+      <div class="form-group" id="cv-day-group"><label>Actual Day of Month</label><select id="cv-day"></select></div>
     </div>
+    <button class="btn btn-danger" id="cv-delete-btn" onclick="deleteTransactionFromModal()" style="display:none;margin-bottom:12px">Delete transaction</button>
+    <button class="btn btn-danger" id="cv-skip-btn" onclick="skipOccurrenceFromModal()" style="display:none;margin-bottom:12px">Delete this occurrence</button>
     <div class="btn-row">
       <button class="btn btn-secondary" id="cv-reset-btn" onclick="resetConfirmedVar()" style="display:none">Reset to default</button>
       <button class="btn btn-secondary" onclick="closeModal('confirm-var-overlay')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveConfirmedVar()">Confirm</button>
+      <button class="btn btn-primary" id="cv-confirm-btn" onclick="saveConfirmedVar()">Confirm</button>
     </div>
   </div>
 </div>
@@ -1313,8 +1318,12 @@ function getOccurrences(item, fromDate, toDate) {
   if (!item.active) return results;
   const isVar = item.type === 'variable';
 
+  // `skipped` (added for per-occurrence deletion from Payment History) marks one occurrence of a
+  // recurring item as "didn't happen" — distinct from overriding its amount, and distinct from
+  // deleting the whole item (which removes every occurrence, past and future).
   function mkOcc(d, mk) {
     const ov = (item.overrides || {})[mk];
+    if (ov && ov.skipped) return null;
     // `ov.amount != null` (not a truthy check) — a confirmed actual of exactly $0 must still count as applied.
     const applied = !!(ov && ov.confirmed && ov.amount != null);
     return {
@@ -1335,7 +1344,8 @@ function getOccurrences(item, fromDate, toDate) {
       let d = parseDate(item.startDate);
       while (d < from) d.setDate(d.getDate() + interval);
       while (d <= to) {
-        results.push(mkOcc(d, isoDate(d)));
+        const occ = mkOcc(d, isoDate(d));
+        if (occ) results.push(occ);
         d.setDate(d.getDate() + interval);
       }
       break;
@@ -1352,7 +1362,7 @@ function getOccurrences(item, fromDate, toDate) {
         const actualDay = resolveActualDay(effDay, y, m);
         const d = new Date(y, m, actualDay);
         if (d > to) break;
-        if (d >= from) results.push({
+        if (d >= from && !(ov && ov.skipped)) results.push({
           date: d,
           amount: (applied && ov.amount != null) ? ov.amount : getEffectiveAmount(item, d),
           estimated: isVar && !applied,
@@ -1382,7 +1392,7 @@ function getOccurrences(item, fromDate, toDate) {
           const actualDay = resolveActualDay(effDay, y, m);
           const d = new Date(y, m, actualDay);
           if (d > to) break;
-          if (d >= from) results.push({
+          if (d >= from && !(ov && ov.skipped)) results.push({
             date: d,
             amount: (applied && ov.amount != null) ? ov.amount : getEffectiveAmount(item, d),
             estimated: isVar && !applied,
@@ -1404,7 +1414,10 @@ function getOccurrences(item, fromDate, toDate) {
           const actualDay = resolveActualDay(dom, y, m);
           const d = new Date(y, m, actualDay);
           if (d > to) break;
-          if (d >= from) results.push(mkOcc(d, isoDate(d)));
+          if (d >= from) {
+            const occ = mkOcc(d, isoDate(d));
+            if (occ) results.push(occ);
+          }
         }
         m++; if (m > 11) { m = 0; y++; }
       }
@@ -1414,7 +1427,10 @@ function getOccurrences(item, fromDate, toDate) {
     case 'once': {
       const d = parseDate(item.startDate);
       const mk = isoDate(d).substring(0, 7);
-      if (d >= from && d <= to) results.push(mkOcc(d, mk));
+      if (d >= from && d <= to) {
+        const occ = mkOcc(d, mk);
+        if (occ) results.push(occ);
+      }
       break;
     }
   }
@@ -1728,6 +1744,15 @@ function focusAccountSection(id) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Cash Flow always renders the whole current month, so without this, landing on the tab drops the
+// user wherever the 1st of the month happens to fall — often several screens above today. Only called
+// when actually navigating TO the tab (openPage/init), never from renderHome() itself, so re-renders
+// triggered by editing/confirming a transaction while already on the page don't yank the scroll away.
+function scrollHomeToToday() {
+  const el = document.querySelector('[id^="tl-today-"]');
+  if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
+}
+
 function renderHome() {
   const t = today();
   const dateStr = t.toLocaleDateString('en-CA', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -1797,16 +1822,16 @@ function renderHome() {
   // payment moves through, and each section's running balance starts from that account's own balance
   // as of the day before the browsed month, not its all-time current balance.
   tl.innerHTML = data.accounts.map(acct =>
-    renderAccountTimeline(acct, events, getAccountBalanceAsOf(acct, dayBeforeMonth), currentMap[acct.id])
+    renderAccountTimeline(acct, events, getAccountBalanceAsOf(acct, dayBeforeMonth), currentMap[acct.id], isCurrentMonth)
   ).join('');
 }
 
-function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance) {
+function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance, isCurrentMonth) {
   const events = allEvents.filter(ev => ev.item.account === acct.id);
 
   let body;
   if (events.length === 0) {
-    body = '<div class="acct-section-empty">No activity this month</div>';
+    body = `<div class="acct-section-empty"${isCurrentMonth ? ` id="tl-today-${acct.id}"` : ''}>No activity this month</div>`;
   } else {
     const grouped = {};
     for (const ev of events) {
@@ -1818,10 +1843,20 @@ function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance) {
     // A true per-transaction ledger: the balance column updates line by line (not once per day), so
     // same-day events need a fixed order to have a well-defined running value — getEvents() already
     // sorts income before expenses before transfers on a tie, which is what's used here.
+    const dateKeys = Object.keys(grouped).sort();
+    const todayKey = isoDate(today());
+    let markerPlaced = !isCurrentMonth; // browsing a past/future month — no "today" marker to place
     let running = seedBalance;
-    body = Object.entries(grouped).map(([dateStr, evs]) => {
+    const chunks = [];
+    for (const dateStr of dateKeys) {
+      if (!markerPlaced && dateStr > todayKey) {
+        chunks.push(`<div class="tl-today-marker" id="tl-today-${acct.id}"><span>Today</span></div>`);
+        markerPlaced = true;
+      }
+      const isToday = isCurrentMonth && dateStr === todayKey;
+      if (isToday) markerPlaced = true;
       const d = parseDate(dateStr);
-      const items = evs.map(ev => {
+      const items = grouped[dateStr].map(ev => {
         running += ev.type === 'income' ? ev.amount : -ev.amount;
         const est = ev.estimated;
         const dotCls = est ? 'estimated' : ev.type;
@@ -1832,7 +1867,11 @@ function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance) {
         const balColor = running < 0 ? 'var(--expense)' : 'var(--text)';
         // Every row is adjustable here now (not just unconfirmed/variable ones) — matches Payment
         // History, and is what actually lets a past transaction be corrected from the Cash Flow view.
-        const click = `onclick="openConfirmModal('${ev.type === 'income' ? 'income' : 'bill'}','${ev.item.id}','${ev.monthKey}')"`;
+        // context='cashflow': a one-off (recurrence 'once') item or transfer can be deleted outright
+        // here; a recurring item can only be adjusted here — deleting one of its occurrences is a
+        // Payment History ('history' context) action, kept separate so a stray tap can't remove it.
+        const kind = ev.isTransfer ? 'transfer' : (ev.type === 'income' ? 'income' : 'bill');
+        const click = `onclick="openConfirmModal('${kind}','${ev.item.id}','${ev.monthKey}','cashflow')"`;
         return `
         <div class="tl-item${rowCls}" ${click}>
           <div class="tl-dot ${dotCls}"></div>
@@ -1848,15 +1887,19 @@ function renderAccountTimeline(acct, allEvents, seedBalance, currentBalance) {
           </div>
         </div>`;
       }).join('');
-      return `
-        <div class="tl-group">
+      chunks.push(`
+        <div class="tl-group"${isToday ? ` id="tl-today-${acct.id}"` : ''}>
           <div class="tl-date-header">
-            <span>${fmtDate(d)}</span>
+            <span>${fmtDate(d)}${isToday ? ' <span class="tl-today-badge">Today</span>' : ''}</span>
           </div>
           ${items}
         </div>
-      `;
-    }).join('');
+      `);
+    }
+    if (!markerPlaced) {
+      chunks.push(`<div class="tl-today-marker" id="tl-today-${acct.id}"><span>Today</span></div>`);
+    }
+    body = chunks.join('');
   }
 
   return `
@@ -1894,41 +1937,67 @@ function renderNeedsReview() {
       const [yr, mn] = occ.monthKey.split('-').map(Number);
       const monthLabel = new Date(yr, mn - 1, 1).toLocaleDateString('en-CA', { month: 'short', year: 'numeric' });
       return `
-        <div class="nr-item" onclick="openConfirmModal('bill','${bill.id}','${occ.monthKey}')">
+        <div class="nr-item" onclick="openConfirmModal('bill','${bill.id}','${occ.monthKey}','cashflow')">
           <div class="nr-item-name">${escapeHtml(bill.name)}</div>
           <div class="nr-item-right">
             <span class="nr-item-amt">~${fmt(occ.amount)}</span>
             <span class="nr-item-month">${monthLabel}</span>
           </div>
-          <button class="nr-update-btn" onclick="event.stopPropagation();openConfirmModal('bill','${bill.id}','${occ.monthKey}')">Update</button>
+          <button class="nr-update-btn" onclick="event.stopPropagation();openConfirmModal('bill','${bill.id}','${occ.monthKey}','cashflow')">Update</button>
         </div>`;
     }).join('')}
   `;
 }
 
-// ===== CONFIRM VARIABLE / ADJUST MODAL — shared by bills and income =====
-function itemList(kind) { return kind === 'income' ? data.income : data.bills; }
+// ===== CONFIRM VARIABLE / ADJUST MODAL — shared by bills, income, and transfers =====
+function itemList(kind) {
+  if (kind === 'income') return data.income;
+  if (kind === 'transfer') return data.transfers || [];
+  return data.bills;
+}
 
-let confirmVarState = { kind: null, itemId: null, monthKey: null };
+let confirmVarState = { kind: null, itemId: null, monthKey: null, context: 'cashflow' };
 
-function openConfirmModal(kind, itemId, monthKey) {
+// `context` distinguishes where the tap came from: 'cashflow' (Cash Flow / Needs Review) only ever
+// lets a one-off transaction (recurrence 'once', or a transfer) be deleted outright — a *recurring*
+// item there can only be adjusted, never deleted, so a stray tap can't drop a whole bill's schedule.
+// 'history' (Payment History, under Expenses/Income) additionally allows deleting just ONE occurrence
+// of a recurring item, leaving the rest of its schedule untouched.
+function openConfirmModal(kind, itemId, monthKey, context) {
   const item = itemList(kind).find(b => b.id === itemId);
   if (!item) return;
-  confirmVarState = { kind, itemId, monthKey };
-  const ov = (item.overrides || {})[monthKey];
+  confirmVarState = { kind, itemId, monthKey, context: context || 'cashflow' };
+
+  const isTransfer = kind === 'transfer';
+  const isOnce = !isTransfer && item.recurrence === 'once';
+  const ov = isTransfer ? null : (item.overrides || {})[monthKey];
   const monthLabel = occKeyLabel(monthKey);
-  const isVar = item.type === 'variable';
+  const isVar = !isTransfer && item.type === 'variable';
   const currentDay = ov ? (ov.dayOfMonth || item.dayOfMonth || 1) : (item.dayOfMonth || 1);
-  document.getElementById('cv-title').textContent = item.name;
-  document.getElementById('cv-sub').textContent = `${monthLabel} · ${isVar ? 'Average' : 'Scheduled'}: ${fmt(item.amount)}`;
-  document.getElementById('cv-amount').value = ov ? ov.amount : item.amount;
+
+  document.getElementById('cv-title').textContent = isTransfer
+    ? `Transfer: ${getAccount(item.fromAccount).name} → ${getAccount(item.toAccount).name}`
+    : item.name;
+  document.getElementById('cv-sub').textContent = isTransfer
+    ? occKeyLabel(monthKey)
+    : `${monthLabel} · ${isVar ? 'Average' : 'Scheduled'}: ${fmt(item.amount)}`;
+  document.getElementById('cv-amount').value = isTransfer ? item.amount : (ov ? ov.amount : item.amount);
+  // Transfers aren't wired for in-place editing yet (see the 2026-07-11 note on transfers) — this modal
+  // only offers deleting one outright, so its amount/day fields are hidden rather than left non-functional.
+  document.getElementById('cv-amount-group').style.display = isTransfer ? 'none' : '';
+  document.getElementById('cv-day-group').style.display = isTransfer ? 'none' : '';
   document.getElementById('cv-day').innerHTML = dayOptionsHTML(currentDay);
-  document.getElementById('cv-reset-btn').style.display = (ov && ov.confirmed) ? '' : 'none';
+  document.getElementById('cv-reset-btn').style.display = (!isTransfer && ov && ov.confirmed) ? '' : 'none';
+  document.getElementById('cv-confirm-btn').style.display = isTransfer ? 'none' : '';
+  document.getElementById('cv-delete-btn').style.display = (isTransfer || isOnce) ? '' : 'none';
+  document.getElementById('cv-skip-btn').style.display = (!isTransfer && !isOnce && confirmVarState.context === 'history') ? '' : 'none';
+
   document.getElementById('confirm-var-overlay').classList.add('open');
 }
 
 function saveConfirmedVar() {
   const { kind, itemId, monthKey } = confirmVarState;
+  if (kind === 'transfer') return; // delete-only for now — see openConfirmModal()
   const item = itemList(kind).find(b => b.id === itemId);
   if (!item) return;
   if (!item.overrides) item.overrides = {};
@@ -1941,9 +2010,46 @@ function saveConfirmedVar() {
   item.overrides[monthKey] = { amount, dayOfMonth, confirmed: true };
   saveData();
   closeModal('confirm-var-overlay');
-  renderHome();
+  renderCurrentPage();
   refreshExpenseHistoryIfOpen();
   showToast('Updated ✓');
+}
+
+// Deletes a one-off manual transaction (a 'once' bill/income, or a transfer) entirely. A recurring
+// item's whole series is still only deletable from Expenses/Income's edit modal (deleteItem()).
+function deleteTransactionFromModal() {
+  const { kind, itemId } = confirmVarState;
+  if (kind === 'transfer') {
+    const t = (data.transfers || []).find(x => x.id === itemId);
+    if (!t || !confirm(`Delete this ${fmt(t.amount)} transfer?`)) return;
+    data.transfers = data.transfers.filter(x => x.id !== itemId);
+  } else {
+    const item = itemList(kind).find(b => b.id === itemId);
+    if (!item || !confirm(`Delete "${item.name}"?`)) return;
+    if (kind === 'income') data.income = data.income.filter(i => i.id !== itemId);
+    else data.bills = data.bills.filter(i => i.id !== itemId);
+  }
+  saveData();
+  closeModal('confirm-var-overlay');
+  renderCurrentPage();
+  refreshExpenseHistoryIfOpen();
+  showToast('Deleted');
+}
+
+// Removes just this one occurrence of a recurring item — every other occurrence, past and future,
+// is untouched. Only reachable from Payment History; see the `context` note on openConfirmModal().
+function skipOccurrenceFromModal() {
+  const { kind, itemId, monthKey } = confirmVarState;
+  const item = itemList(kind).find(b => b.id === itemId);
+  if (!item) return;
+  if (!confirm(`Delete this occurrence of "${item.name}"?`)) return;
+  if (!item.overrides) item.overrides = {};
+  item.overrides[monthKey] = { skipped: true };
+  saveData();
+  closeModal('confirm-var-overlay');
+  renderCurrentPage();
+  refreshExpenseHistoryIfOpen();
+  showToast('Occurrence deleted');
 }
 
 function resetConfirmedVar() {
@@ -1953,7 +2059,7 @@ function resetConfirmedVar() {
   delete item.overrides[monthKey];
   saveData();
   closeModal('confirm-var-overlay');
-  renderHome();
+  renderCurrentPage();
   refreshExpenseHistoryIfOpen();
   showToast(item.type === 'variable' ? 'Reset to average' : 'Reset to default');
 }
@@ -2002,7 +2108,7 @@ function renderExpenseHistory() {
   const rowsHTML = occs.length === 0
     ? '<div class="empty"><div class="em-icon">📭</div><p>No payments this year</p></div>'
     : `<div class="budget-list" style="padding:0">${occs.map(occ => `
-        <div class="budget-item ${occ.estimated ? 'estimated-row' : 'clickable'}" onclick="openConfirmModal('${kind}','${item.id}','${occ.monthKey}')">
+        <div class="budget-item ${occ.estimated ? 'estimated-row' : 'clickable'}" onclick="openConfirmModal('${kind}','${item.id}','${occ.monthKey}','history')">
           <div class="bi-icon ${isIncome ? 'cat-income' : 'cat-' + escapeHtml(item.category || 'other')}">${isIncome ? '💰' : (CAT_ICON[item.category] || '📦')}</div>
           <div class="bi-info">
             <div class="bi-name">${fmtDate(occ.date)}</div>
@@ -2410,7 +2516,7 @@ function openPage(name) {
   if (nb) nb.classList.add('active');
   const sb = document.getElementById(`snav-${name}`);
   if (sb) sb.classList.add('active');
-  if (name === 'home') renderHome();
+  if (name === 'home') { renderHome(); scrollHomeToToday(); }
   else if (name === 'expenses') renderExpenses();
   else if (name === 'income') renderIncome();
   else if (name === 'reports') renderReports();
@@ -2458,14 +2564,34 @@ function saveAccount() {
   const a = data.accounts.find(a => a.id === editAccountId);
   if (!a) return;
   a.name = name || a.name;
-  a.balance = balance;
-  // Whenever a balance is (re)entered, it's a fresh snapshot as of right now — re-anchoring balanceDate
-  // here is what lets getCurrentBalance() keep advancing on its own afterward instead of going stale.
-  a.balanceDate = isoDate(today());
+
+  // Editing the balance corrects TODAY's real-world number. Re-anchoring balance/balanceDate straight
+  // to it would silently rewrite every past month's balance too (getAccountBalanceAsOf rolls backward
+  // from the anchor for past dates), and leaves no record of *why* the number changed. Instead, the gap
+  // between what the schedule alone projects for today and what was just entered becomes a visible
+  // one-off "Balance Adjustment" transaction dated today — every future balance already recalculates
+  // through it like any other bill/income, while past balances are untouched since the correction only
+  // applies from today forward. The anchor itself is left as-is.
+  const delta = Math.round((balance - getCurrentBalance(a)) * 100) / 100;
+  if (delta !== 0) {
+    const adjItem = {
+      id: 'item-' + Date.now(), name: 'Balance Adjustment',
+      amount: Math.abs(delta), account: a.id, recurrence: 'once', startDate: isoDate(today()), active: true
+    };
+    if (delta > 0) {
+      data.income.push(adjItem);
+    } else {
+      adjItem.category = 'other';
+      adjItem.type = 'fixed';
+      adjItem.overrides = {};
+      data.bills.push(adjItem);
+    }
+  }
+
   saveData();
   closeModal('edit-account-overlay');
   renderCurrentPage();
-  showToast('Account updated');
+  showToast(delta !== 0 ? `Account updated — added a ${delta > 0 ? '+' : '-'}${fmt(delta)} adjustment` : 'Account updated');
 }
 
 // ===== EDIT ITEM =====
@@ -3071,6 +3197,7 @@ initSync().then(() => {
     if (document.getElementById('pin-screen').style.display === 'flex') showPinEntry();
   }
   renderHome();
+  scrollHomeToToday();
 });
 </script>
 </body>
