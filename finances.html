@@ -112,6 +112,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .summary-card .s-amount{font-size:18px;font-weight:700}
 .s-amount.income{color:var(--income)}
 .s-amount.expense{color:var(--expense)}
+.s-amount.savings{color:var(--accent)}
 .s-amount.net.pos{color:var(--income)}
 .s-amount.net.neg{color:var(--expense)}
 .budget-list{padding:0 20px}
@@ -611,6 +612,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <div class="edit-fields">
       <div class="form-group" id="cv-amount-group"><label>Actual Amount (CAD)</label><input id="cv-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>
       <div class="form-group" id="cv-day-group"><label>Actual Day of Month</label><select id="cv-day"></select></div>
+      <div class="form-group" id="cv-category-group" style="display:none"><label>Category</label><select id="cv-category"></select></div>
     </div>
     <button class="btn btn-danger" id="cv-delete-btn" onclick="deleteTransactionFromModal()" style="display:none;margin-bottom:12px">Delete transaction</button>
     <button class="btn btn-danger" id="cv-skip-btn" onclick="skipOccurrenceFromModal()" style="display:none;margin-bottom:12px">Delete this occurrence</button>
@@ -1216,6 +1218,18 @@ function repairMissingBalanceDates() {
   }
 }
 
+// One-time fix for data created by Smart Money's "Move to savings" button before the 'savings'
+// category existed: those entries were saved as a plain 'other'-category expense, which is what made
+// the Reports "Income vs Expenses" chart count real savings as spending. Matches narrowly (exact name,
+// still 'other', still a one-off) so it only touches this feature's own past output, not user data.
+function repairSavingsCategory() {
+  for (const b of (data.bills || [])) {
+    if (b.name === 'Move to savings' && b.recurrence === 'once' && b.category === 'other') {
+      b.category = 'savings';
+    }
+  }
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem('pf_data_v2');
@@ -1224,6 +1238,7 @@ function loadData() {
     if (!Array.isArray(data.transfers)) data.transfers = []; // older saved data predates transfers
     repairMissingBalanceDates();
     repairOrphanedAccounts();
+    repairSavingsCategory();
   } catch(e) {
     data = JSON.parse(JSON.stringify(DEFAULT_DATA));
   }
@@ -1488,13 +1503,14 @@ function getAccount(id) {
 }
 const CAT_ICON = {
   housing:'🏠', utilities:'💡', insurance:'🛡️', debt:'📋',
-  credit:'💳', income:'💰', education:'🎓', other:'📦'
+  credit:'💳', income:'💰', education:'🎓', other:'📦', savings:'🐷'
 };
 
 const BILL_GROUPS = [
   { title: 'House Expenses',  cats: ['housing', 'insurance'] },
   { title: 'Education',       cats: ['education'] },
   { title: 'Utility Bills',   cats: ['utilities'] },
+  { title: 'Savings',         cats: ['savings'] },
   { title: 'Other Expenses',  cats: ['debt', 'credit', 'other'] },
 ];
 
@@ -1515,6 +1531,10 @@ function parseDayValue(val) {
 // ===== CHARTS (hand-rolled inline SVG — no external library) =====
 const CHART_INCOME = 'var(--chart-income)'; // darker green, validated for dark-surface chart marks
 const CHART_EXPENSE = 'var(--expense)';
+// Reuses the existing --accent blue rather than adding a new hue — validated with the dataviz skill's
+// validate_palette.py against both --chart-income and --expense on the dark chart surface (#1e293b):
+// both pairs pass every check (CVD ΔE 27.5/26.7, normal-vision floor 29.4/35.2, contrast >=3:1).
+const CHART_SAVINGS = 'var(--accent)';
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function fmtCompact(n) {
@@ -1563,7 +1583,11 @@ function getMonthlyForecastSeries(months) {
   const t = today();
   const startBalance = data.accounts.reduce((s, a) => s + getCurrentBalance(a), 0);
   const finalEnd = new Date(t.getFullYear(), t.getMonth() + months, 0);
-  const events = getEvents(t, finalEnd);
+  // Starts from tomorrow, not today: getCurrentBalance() already rolls forward through every event
+  // dated on or before today, so re-including today here would double-count anything dated today on
+  // top of startBalance — this was a real bug that showed a large same-day expense as subtracted twice.
+  const tomorrow = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+  const events = getEvents(tomorrow, finalEnd);
   const byDate = {};
   for (const ev of events) {
     const key = isoDate(ev.date);
@@ -1670,10 +1694,15 @@ function getYearMonthlyTotals(year) {
   for (let m = 0; m < 12; m++) {
     const from = new Date(year, m, 1), to = new Date(year, m + 1, 0);
     const events = getEvents(from, to).filter(e => !e.isTransfer);
+    const expenseEvents = events.filter(e => e.type === 'expense');
     totals.push({
       month: m,
       income: events.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0),
-      expense: events.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0)
+      // Money moved to savings (category 'savings' — e.g. via Smart Money's "Move to savings") isn't
+      // real spending, just money set aside; kept as its own total so it stacks separately, not lumped
+      // into "expenses."
+      expense: expenseEvents.filter(e => e.item.category !== 'savings').reduce((s, e) => s + e.amount, 0),
+      savings: expenseEvents.filter(e => e.item.category === 'savings').reduce((s, e) => s + e.amount, 0)
     });
   }
   return totals;
@@ -1686,8 +1715,9 @@ function renderIncomeExpenseChart(year) {
   const totals = getYearMonthlyTotals(year);
   const W = 720, H = 220, PAD_L = 48, PAD_R = 12, PAD_T = 14, PAD_B = 26;
   const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
+  const baseline = PAD_T + plotH;
 
-  const maxVal = Math.max(1, ...totals.flatMap(t => [t.income, t.expense]));
+  const maxVal = Math.max(1, ...totals.flatMap(t => [t.income, t.expense + t.savings]));
   const yTicks = niceTicks(0, maxVal, 4);
   const yMax = yTicks[yTicks.length - 1];
   const y = scaleLinear(0, yMax, PAD_T + plotH, PAD_T);
@@ -1695,6 +1725,7 @@ function renderIncomeExpenseChart(year) {
   const groupW = plotW / 12;
   const barW = Math.min(14, groupW * 0.32);
   const gap = 3;
+  const STACK_GAP = 2; // surface-colored gap between stacked segments, per the mark spec
 
   let gridSvg = '';
   yTicks.forEach(v => {
@@ -1707,9 +1738,21 @@ function renderIncomeExpenseChart(year) {
   totals.forEach((t, i) => {
     const cx = PAD_L + i * groupW + groupW / 2;
     const incX = cx - gap / 2 - barW, expX = cx + gap / 2;
-    const incTop = y(t.income), expTop = y(t.expense);
-    barsSvg += `<path d="${roundedTopRectPath(incX, incTop, barW, PAD_T + plotH - incTop, 3)}" style="fill:${CHART_INCOME}"><title>${MONTH_NAMES[i]} ${year} income: ${fmt(t.income)}</title></path>`;
-    barsSvg += `<path d="${roundedTopRectPath(expX, expTop, barW, PAD_T + plotH - expTop, 3)}" style="fill:${CHART_EXPENSE}"><title>${MONTH_NAMES[i]} ${year} expenses: ${fmt(t.expense)}</title></path>`;
+    const incTop = y(t.income);
+    barsSvg += `<path d="${roundedTopRectPath(incX, incTop, barW, baseline - incTop, 3)}" style="fill:${CHART_INCOME}"><title>${MONTH_NAMES[i]} ${year} income: ${fmt(t.income)}</title></path>`;
+
+    // Expenses stack first (bottom), savings on top — only the topmost segment gets the rounded
+    // data-end, the seam between them gets a small gap instead of the segments touching directly.
+    const expTop = y(t.expense);
+    if (t.savings > 0) {
+      const expH = Math.max(0, baseline - expTop - STACK_GAP / 2);
+      barsSvg += `<path d="${roundedTopRectPath(expX, expTop, barW, expH, 0)}" style="fill:${CHART_EXPENSE}"><title>${MONTH_NAMES[i]} ${year} expenses: ${fmt(t.expense)}</title></path>`;
+      const savTop = y(t.expense + t.savings);
+      const savH = Math.max(0, expTop - savTop - STACK_GAP / 2);
+      barsSvg += `<path d="${roundedTopRectPath(expX, savTop, barW, savH, 3)}" style="fill:${CHART_SAVINGS}"><title>${MONTH_NAMES[i]} ${year} savings: ${fmt(t.savings)}</title></path>`;
+    } else {
+      barsSvg += `<path d="${roundedTopRectPath(expX, expTop, barW, baseline - expTop, 3)}" style="fill:${CHART_EXPENSE}"><title>${MONTH_NAMES[i]} ${year} expenses: ${fmt(t.expense)}</title></path>`;
+    }
     labelsSvg += `<text x="${cx}" y="${H - 8}" text-anchor="middle" font-size="10" style="fill:var(--muted)">${MONTH_NAMES[i]}</text>`;
   });
 
@@ -1720,6 +1763,7 @@ function renderIncomeExpenseChart(year) {
     <div class="chart-legend">
       <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:${CHART_INCOME}"></span>Income</div>
       <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:${CHART_EXPENSE}"></span>Expenses</div>
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:${CHART_SAVINGS}"></span>Savings</div>
     </div>
   `;
 }
@@ -1778,13 +1822,16 @@ function renderHome() {
 
   // Cards up top always reflect the real current balance / 30-day outlook as of today, regardless of
   // which month is being browsed below — the two are independent views (current state vs. history/plan).
+  // Starts from tomorrow, not today — getCurrentBalance() already includes everything dated on or
+  // before today, so starting the projection at today too would double-count today's events.
+  const tomorrow30 = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
   const to30 = new Date(t); to30.setDate(to30.getDate() + 30);
   const currentMap = {}, projMap = {};
   for (const a of data.accounts) {
     currentMap[a.id] = getCurrentBalance(a);
     projMap[a.id] = currentMap[a.id];
   }
-  for (const ev of getEvents(t, to30)) {
+  for (const ev of getEvents(tomorrow30, to30)) {
     const aid = ev.item.account;
     if (projMap[aid] !== undefined)
       projMap[aid] += ev.type === 'income' ? ev.amount : -ev.amount;
@@ -1997,6 +2044,18 @@ function openConfirmModal(kind, itemId, monthKey, context) {
   document.getElementById('cv-delete-btn').style.display = (isTransfer || isOnce) ? '' : 'none';
   document.getElementById('cv-skip-btn').style.display = (!isTransfer && !isOnce && confirmVarState.context === 'history') ? '' : 'none';
 
+  // A one-off expense is otherwise unreachable for anything but amount/delete once it's hidden from
+  // the Expenses list (see 2026-07-28's "hide one-time transactions" change) — this is the only
+  // remaining place to fix its category (e.g. retagging a manual "Move to savings" bill as Savings).
+  const showCategory = kind === 'bill' && isOnce;
+  document.getElementById('cv-category-group').style.display = showCategory ? '' : 'none';
+  if (showCategory) {
+    document.getElementById('cv-category').innerHTML =
+      ['housing','utilities','insurance','education','debt','credit','savings','other'].map(c =>
+        `<option value="${c}" ${item.category === c ? 'selected' : ''}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`
+      ).join('');
+  }
+
   document.getElementById('confirm-var-overlay').classList.add('open');
 }
 
@@ -2013,6 +2072,12 @@ function saveConfirmedVar() {
   const parsedDay = parseDayValue(document.getElementById('cv-day').value);
   const dayOfMonth = parsedDay !== null ? parsedDay : item.dayOfMonth;
   item.overrides[monthKey] = { amount, dayOfMonth, confirmed: true };
+  // Category is a whole-item property, not a per-occurrence one — only shown/editable for one-off
+  // bills (see openConfirmModal's showCategory), so only touch it in that same case.
+  if (kind === 'bill' && item.recurrence === 'once') {
+    const catEl = document.getElementById('cv-category');
+    if (catEl && catEl.value) item.category = catEl.value;
+  }
   saveData();
   closeModal('confirm-var-overlay');
   renderCurrentPage();
@@ -2238,10 +2303,14 @@ function renderReports() {
   const yearTotals = getYearMonthlyTotals(reportsYear);
   const yearIncome = yearTotals.reduce((s, t) => s + t.income, 0);
   const yearExpense = yearTotals.reduce((s, t) => s + t.expense, 0);
+  const yearSavings = yearTotals.reduce((s, t) => s + t.savings, 0);
+  // Money moved to savings isn't spending, so it's excluded from both "Expenses" and "Net" here —
+  // same definition the stacked chart below uses.
   const yearNet = yearIncome - yearExpense;
   document.getElementById('reports-year-summary').innerHTML = `
     <div class="summary-card"><div class="s-label">Income</div><div class="s-amount income">${fmt(yearIncome)}</div></div>
     <div class="summary-card"><div class="s-label">Expenses</div><div class="s-amount expense">${fmt(yearExpense)}</div></div>
+    ${yearSavings > 0 ? `<div class="summary-card"><div class="s-label">Savings</div><div class="s-amount savings">${fmt(yearSavings)}</div></div>` : ''}
     <div class="summary-card"><div class="s-label">Net</div><div class="s-amount net ${yearNet >= 0 ? 'pos' : 'neg'}">${yearNet >= 0 ? '+' : '-'}${fmt(Math.abs(yearNet))}</div></div>
   `;
   renderIncomeExpenseChart(reportsYear);
@@ -2304,14 +2373,27 @@ function setSmartMoneyBuffer(val) {
 }
 
 // Projects one account's balance day-by-day (same net-per-day approach as the Cash Flow table, so a
-// same-day income+bill can't be mis-ordered) from today through its next scheduled income event — or
-// 90 days out if none is scheduled — and finds the lowest point along the way.
+// same-day income+bill can't be mis-ordered) from tomorrow through at least 30 days out — or its next
+// scheduled income event, whichever is LATER — and finds the lowest point along the way.
+//
+// The horizon floor matters: with frequent (e.g. weekly) income, "until the next paycheck" can be only
+// a couple of days away, which hides an entire month of larger, less-frequent bills (insurance,
+// property tax, credit cards) landing later — well before the paycheck *after* that one refills things
+// again. A real incident: with only a 2-day horizon, this suggested $7,834.42 was "safe to move" for an
+// account that in fact had a full month of bills still ahead of it. The 30-day floor fixes that.
+//
+// Starting from tomorrow (not today) matters too: `getCurrentBalance()` already rolls forward through
+// every event dated on or before today, so re-fetching from today would double-count anything already
+// baked into today's balance — this was the second bug behind that same incident's numbers looking
+// worse than reality on the very next date sampled.
 function getSmartMoneyPlan(acct, bufferAmount) {
   const t = today();
-  const horizonEnd = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 90);
-  const events = getEvents(t, horizonEnd).filter(ev => ev.item.account === acct.id);
+  const tomorrow = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+  const horizonCap = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 90);
+  const minHorizon = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 30);
+  const events = getEvents(tomorrow, horizonCap).filter(ev => ev.item.account === acct.id);
   const nextIncomeEv = events.find(ev => ev.type === 'income');
-  const horizonDate = nextIncomeEv ? nextIncomeEv.date : horizonEnd;
+  const horizonDate = !nextIncomeEv ? horizonCap : (nextIncomeEv.date > minHorizon ? nextIncomeEv.date : minHorizon);
 
   const byDay = {};
   for (const ev of events) {
@@ -2334,7 +2416,7 @@ function getSmartMoneyPlan(acct, bufferAmount) {
 
   const safeToMove = Math.max(0, Math.round((minBalance - bufferAmount) * 100) / 100);
   return {
-    acct, currentBalance: startBalance, safeToMove, minBalance, minDate,
+    acct, currentBalance: startBalance, safeToMove, minBalance, minDate, horizonDate,
     nextIncomeDate: nextIncomeEv ? nextIncomeEv.date : null, series
   };
 }
@@ -2437,19 +2519,25 @@ function renderSmartMoney() {
     </div>
   `).join('');
 
+  const t = today();
   for (const acct of data.accounts) {
     const plan = getSmartMoneyPlan(acct, bufferAmount);
     const heroEl = document.getElementById(`sm-hero-${acct.id}`);
     const dipStr = fmtDateShort(plan.minDate);
     const nextIncomeStr = plan.nextIncomeDate ? fmtDateShort(plan.nextIncomeDate) : null;
+    const horizonDays = Math.round((plan.horizonDate - t) / 86400000);
+    const horizonStr = fmtDateShort(plan.horizonDate);
 
+    // Deliberately doesn't frame this as "before your next paycheck" — with frequent income the
+    // calculation window now extends well past the very next one (see getSmartMoneyPlan's 30-day
+    // floor), so that framing would be misleading; the window length itself is what's accurate.
     let sub;
     if (plan.minBalance < 0) {
-      sub = `Projected to go negative (${fmt(plan.minBalance)}) on ${dipStr}${nextIncomeStr ? `, before your next income on ${nextIncomeStr}` : ''} — don't move anything from this account right now.`;
+      sub = `Projected to go negative (${fmt(plan.minBalance)}) on ${dipStr} — don't move anything from this account right now.`;
     } else if (plan.safeToMove <= 0) {
-      sub = `Balance dips to ${fmt(plan.minBalance)} on ${dipStr}${nextIncomeStr ? `, right before your next income on ${nextIncomeStr}` : ''} — at or below your ${fmt(bufferAmount)} buffer, so nothing extra is safe to move yet.`;
+      sub = `Balance dips to ${fmt(plan.minBalance)} on ${dipStr} — at or below your ${fmt(bufferAmount)} buffer, so nothing extra is safe to move yet.`;
     } else {
-      sub = `Keeps at least ${fmt(bufferAmount)} in the account through ${dipStr}${nextIncomeStr ? `, right before your next income on ${nextIncomeStr}` : ' (90-day outlook — no income scheduled for this account yet)'}.`;
+      sub = `Keeps at least ${fmt(bufferAmount)} in the account over the next ${horizonDays} days (through ${horizonStr})${nextIncomeStr ? `, including your next paycheck on ${nextIncomeStr}` : ' — no income scheduled for this account yet'}.`;
     }
 
     heroEl.innerHTML = `
@@ -2462,7 +2550,7 @@ function renderSmartMoney() {
 
     const actionEl = document.getElementById(`sm-action-${acct.id}`);
     actionEl.innerHTML = plan.safeToMove > 0
-      ? `<button class="btn btn-secondary sm-move-btn" onclick='openQuickTx({type:"transfer",fromAccount:"${acct.id}",amount:${plan.safeToMove},name:"Move to savings"})'>Move ${fmt(plan.safeToMove)} to savings</button>`
+      ? `<button class="btn btn-secondary sm-move-btn" onclick='openQuickTx({type:"transfer",fromAccount:"${acct.id}",amount:${plan.safeToMove},name:"Move to savings",category:"savings"})'>Move ${fmt(plan.safeToMove)} to savings</button>`
       : '';
   }
 }
@@ -2649,7 +2737,7 @@ function editItem(type, id) {
   if (!item) return;
   document.getElementById('edit-item-title').textContent = item.name;
   const catOpts = type === 'bill' ?
-    ['housing','utilities','insurance','education','debt','credit','other'].map(c =>
+    ['housing','utilities','insurance','education','debt','credit','savings','other'].map(c =>
       `<option value="${c}" ${item.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
     ).join('') : '';
   document.getElementById('edit-item-body').innerHTML = `
@@ -2816,7 +2904,7 @@ function renderWizardStep() {
 
   if (wizardState.step === 1) {
     const catOpts = wizardState.type === 'expense' ?
-      ['housing','utilities','insurance','education','debt','credit','other'].map(c =>
+      ['housing','utilities','insurance','education','debt','credit','savings','other'].map(c =>
         `<option value="${c}" ${wizardState.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
       ).join('') : '';
     body.innerHTML = `
@@ -3004,7 +3092,7 @@ function renderQuickTxBody() {
     `;
   } else {
     const catOpts = s.type === 'expense' ?
-      ['housing','utilities','insurance','education','debt','credit','other'].map(c =>
+      ['housing','utilities','insurance','education','debt','credit','savings','other'].map(c =>
         `<option value="${c}" ${s.category===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`
       ).join('') : '';
     body.innerHTML = `
@@ -3104,6 +3192,7 @@ function importData(event) {
       if (!Array.isArray(data.transfers)) data.transfers = [];
       repairMissingBalanceDates();
       repairOrphanedAccounts();
+      repairSavingsCategory();
       saveData();
       renderHome(); renderExpenses(); renderIncome(); renderReports(); renderSettings();
       showToast('Data imported!');
