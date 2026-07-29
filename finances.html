@@ -1555,30 +1555,41 @@ function roundedTopRectPath(x, top, w, h, r) {
   return `M${x},${top + h} L${x},${top + r} Q${x},${top} ${x + r},${top} L${x + w - r},${top} Q${x + w},${top} ${x + w},${top + r} L${x + w},${top + h} Z`;
 }
 
-// Combined-balance running total after every future event — used to warn when the user will be
-// short on money, or when there's a comfortable surplus to move into savings. Reuses the exact
-// $0 / $500 thresholds already used for the timeline balance coloring elsewhere in this app.
-function getForecastSeries(months) {
+// One point per month (today, then each of the next `months` month-ends) instead of one point per
+// individual event — a multi-month forecast is a trend job, not a day-precision job (that's what Cash
+// Flow itself is for), and day-level events (100+ points for a household with weekly bills/income)
+// just crowd the chart into an unreadable, overlapping zigzag.
+function getMonthlyForecastSeries(months) {
   const t = today();
-  const to = new Date(t.getFullYear(), t.getMonth() + months, t.getDate());
-  const events = getEvents(t, to);
   const startBalance = data.accounts.reduce((s, a) => s + getCurrentBalance(a), 0);
+  const finalEnd = new Date(t.getFullYear(), t.getMonth() + months, 0);
+  const events = getEvents(t, finalEnd);
   const byDate = {};
   for (const ev of events) {
     const key = isoDate(ev.date);
     byDate[key] = (byDate[key] || 0) + (ev.type === 'income' ? ev.amount : -ev.amount);
   }
-  const points = [{ date: new Date(t), balance: startBalance }];
-  let running = startBalance;
-  for (const [key, net] of Object.entries(byDate)) {
-    running += net;
-    points.push({ date: parseDate(key), balance: running });
+  const sortedKeys = Object.keys(byDate).sort();
+
+  const points = [{ date: new Date(t), balance: startBalance, label: 'Today' }];
+  let running = startBalance, idx = 0;
+  for (let i = 1; i <= months; i++) {
+    const monthEndDate = new Date(t.getFullYear(), t.getMonth() + i, 0);
+    const monthEndKey = isoDate(monthEndDate);
+    while (idx < sortedKeys.length && sortedKeys[idx] <= monthEndKey) {
+      running += byDate[sortedKeys[idx]];
+      idx++;
+    }
+    points.push({ date: monthEndDate, balance: running });
   }
   return points;
 }
 
+// Reuses the Smart Money safety buffer as the "low" threshold instead of a hardcoded $500 — one
+// number the user controls, instead of two separate ideas of "how much cushion do I want."
 function balanceZoneColor(bal) {
-  return bal < 0 ? 'var(--expense)' : bal < 500 ? 'var(--warn)' : 'var(--income)';
+  const buffer = getSmartMoneyBuffer();
+  return bal < 0 ? 'var(--expense)' : bal < buffer ? 'var(--warn)' : 'var(--income)';
 }
 
 function renderCashFlowChart() {
@@ -1590,13 +1601,14 @@ function renderCashFlowChart() {
   }
 
   const MONTHS = 9;
-  const points = getForecastSeries(MONTHS);
+  const buffer = getSmartMoneyBuffer();
+  const points = getMonthlyForecastSeries(MONTHS);
   const W = 720, H = 220, PAD_L = 52, PAD_R = 14, PAD_T = 14, PAD_B = 26;
   const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
 
   const balances = points.map(p => p.balance);
   const dataMin = Math.min(0, ...balances);
-  const dataMax = Math.max(500, ...balances);
+  const dataMax = Math.max(buffer, ...balances);
   const yTicks = niceTicks(dataMin, dataMax, 4);
   const yMin = yTicks[0], yMax = yTicks[yTicks.length - 1];
 
@@ -1613,17 +1625,21 @@ function renderCashFlowChart() {
   if (yMin <= 0 && 0 <= yMax) {
     refSvg += `<line x1="${PAD_L}" y1="${y(0)}" x2="${PAD_L + plotW}" y2="${y(0)}" style="stroke:var(--expense)" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
   }
-  if (yMin <= 500 && 500 <= yMax) {
-    refSvg += `<line x1="${PAD_L}" y1="${y(500)}" x2="${PAD_L + plotW}" y2="${y(500)}" style="stroke:var(--warn)" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
+  if (yMin <= buffer && buffer <= yMax) {
+    refSvg += `<line x1="${PAD_L}" y1="${y(buffer)}" x2="${PAD_L + plotW}" y2="${y(buffer)}" style="stroke:var(--warn)" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
   }
 
+  // A soft fill under the whole curve gives the trend visual weight, the way most finance-app
+  // balance charts read — separate from the line itself, which stays zone-colored per segment.
+  let areaPath = `M${x(firstT)},${PAD_T + plotH} `;
+  for (const p of points) areaPath += `L${x(p.date.getTime())},${y(p.balance)} `;
+  areaPath += `L${x(lastT)},${PAD_T + plotH} Z`;
+  const areaSvg = `<path d="${areaPath}" fill="var(--chart-income)" opacity="0.12"/>`;
+
   let xLabelSvg = '';
-  const labelCount = Math.min(MONTHS, 6);
-  for (let i = 0; i <= labelCount; i++) {
-    const frac = i / labelCount;
-    const d = new Date(firstT + frac * (lastT - firstT));
-    xLabelSvg += `<text x="${x(d.getTime())}" y="${H - 8}" text-anchor="middle" font-size="10" style="fill:var(--muted)">${d.toLocaleDateString('en-CA', { month: 'short' })}</text>`;
-  }
+  points.forEach(p => {
+    xLabelSvg += `<text x="${x(p.date.getTime())}" y="${H - 8}" text-anchor="middle" font-size="10" style="fill:var(--muted)">${p.label || p.date.toLocaleDateString('en-CA', { month: 'short' })}</text>`;
+  });
 
   let lineSvg = '', dotsSvg = '';
   for (let i = 0; i < points.length; i++) {
@@ -1633,16 +1649,16 @@ function renderCashFlowChart() {
       const prev = points[i - 1];
       lineSvg += `<line x1="${x(prev.date.getTime())}" y1="${y(prev.balance)}" x2="${px}" y2="${py}" style="stroke:${balanceZoneColor(p.balance)}" stroke-width="2" stroke-linecap="round"/>`;
     }
-    dotsSvg += `<circle cx="${px}" cy="${py}" r="4" style="fill:${balanceZoneColor(p.balance)};stroke:var(--surface)" stroke-width="2"><title>${escapeHtml(fmtDateShort(p.date))}: ${fmt(p.balance)}</title></circle>`;
+    dotsSvg += `<circle cx="${px}" cy="${py}" r="4" style="fill:${balanceZoneColor(p.balance)};stroke:var(--surface)" stroke-width="2"><title>${escapeHtml(p.label || fmtDateShort(p.date))}: ${fmt(p.balance)}</title></circle>`;
   }
 
   container.innerHTML = `
     <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-      ${gridSvg}${refSvg}${lineSvg}${dotsSvg}${xLabelSvg}
+      ${gridSvg}${refSvg}${areaSvg}${lineSvg}${dotsSvg}${xLabelSvg}
     </svg>
     <div class="chart-legend">
       <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--income)"></span>Healthy</div>
-      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--warn)"></span>Low — below $500</div>
+      <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--warn)"></span>Low — below ${fmt(buffer)} buffer</div>
       <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--expense)"></span>Below $0</div>
     </div>
   `;
@@ -1847,7 +1863,9 @@ function renderFlowTable(accounts, events, dayBeforeMonth, monthStart, monthEnd,
       let netDay = 0;
       // Same-day events are listed (and applied to the running total) income-before-expense, per
       // getEvents()'s existing sort order — kept individually tappable, same as the old per-account view.
-      const txnLines = evs.map(ev => {
+      // A $0 occurrence (e.g. a variable bill confirmed as waived) doesn't move the balance and isn't
+      // useful to see as a row — it still exists in the data (editable from Payment History), just hidden here.
+      const txnLines = evs.filter(ev => ev.amount !== 0).map(ev => {
         netDay += ev.type === 'income' ? ev.amount : -ev.amount;
         const est = ev.estimated;
         const amtCls = est ? 'estimated' : ev.type;
@@ -2130,6 +2148,10 @@ function renderExpenses() {
   const monthTotal = getEvents(from, to).filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
   document.getElementById('expenses-month-total').textContent = `This month: ${fmt(monthTotal)}`;
 
+  // One-off manual transactions (recurrence 'once' — e.g. a single Cash Flow "+ Add Transaction" entry,
+  // or a Balance Adjustment) aren't a recurring bill to manage a schedule for; they're only ever
+  // edited/deleted from Cash Flow, so they're excluded from this list entirely.
+  const recurringBills = data.bills.filter(b => b.recurrence !== 'once');
   const assignedCats = new Set(BILL_GROUPS.flatMap(g => g.cats));
   const billRow = item => `
     <div class="settings-row" onclick="openExpenseHistory('bill','${item.id}')">
@@ -2144,13 +2166,13 @@ function renderExpenses() {
     </div>`;
 
   const groupedHTML = BILL_GROUPS.map(group => {
-    const bills = data.bills.filter(b => group.cats.includes(b.category || ''));
+    const bills = recurringBills.filter(b => group.cats.includes(b.category || ''));
     if (!bills.length) return '';
     return `<div class="section-title">${group.title}</div>
     <div class="settings-section">${bills.map(billRow).join('')}</div>`;
   }).join('');
 
-  const otherBills = data.bills.filter(b => !assignedCats.has(b.category || ''));
+  const otherBills = recurringBills.filter(b => !assignedCats.has(b.category || ''));
   const otherHTML = otherBills.length
     ? `<div class="section-title">Other Expenses</div><div class="settings-section">${otherBills.map(billRow).join('')}</div>`
     : '';
@@ -2166,9 +2188,12 @@ function renderIncome() {
   const monthTotal = getEvents(from, to).filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
   document.getElementById('income-month-total').textContent = `This month: ${fmt(monthTotal)}`;
 
-  document.getElementById('income-list').innerHTML = data.income.length ? `
+  // Same reasoning as Expenses: a one-off (recurrence 'once') income entry isn't a recurring stream to
+  // manage a schedule for — it's only ever edited/deleted from Cash Flow.
+  const recurringIncome = data.income.filter(i => i.recurrence !== 'once');
+  document.getElementById('income-list').innerHTML = recurringIncome.length ? `
     <div class="settings-section">
-      ${data.income.map(item => {
+      ${recurringIncome.map(item => {
         const current = getEffectiveAmount(item, t);
         const future = (item.amountSchedule || [])
           .filter(s => parseDate(s.effectiveDate) > t)
